@@ -1,0 +1,21 @@
+{
+  "name": "eth-stats",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Ethereum Stats",
+  "main": "src/index.js",
+  "scripts": {
+    "lint": "eslint src",
+    "pretty": "prettier src"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:jim-lake/eth-stats.git"
+  },
+  "author": {
+    "name": "Jim Lake"
+  },
+  "license": "MIT",
+  "dependencies": {
+  }
+}
