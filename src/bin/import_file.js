@@ -1,339 +1,166 @@
 'use strict';
 
 const async = require('async');
-const crypto = require('crypto');
-const db = require('../tools/pg_db.js');
+const db = require('../tools/pg_db');
 const rlp = require('rlp');
-const EthUtil = require('ethereumjs-util');
-const Common = require('ethereumjs-common').default;
-const mainnetGenesisState = require('ethereumjs-common/dist/genesisStates/mainnet');
 const Block = require('ethereumjs-block');
 const fs = require('fs');
 const config = require('../../config.json');
+const BlockTransform = require('../lib/block_transform');
+
 const argv = process.argv.slice(2);
 
-const GENESIS_ADDR = Buffer.from('GENESIS').toString('hex');
-const BLOCK_REWARD_ADDR = Buffer.from('BLOCK_REWARD').toString('hex');
-const CONTRACT_ADDR = Buffer.from('CONTRACT_CREATE').toString('hex');
-const BLOCK_REWARD_ORDER = 2 ** 30;
-const UNCLE_REWARD_ORDER = BLOCK_REWARD_ORDER + 1;
+const PARALLEL_LIMIT = 10;
+const BUFFER_MIN = 10000000;
+const READ_LEN = BUFFER_MIN * 2;
 
 db.init(config.db);
 
-const common = new Common('mainnet');
-const data = fs.readFileSync(argv[0]);
+const read_buffer = Buffer.allocUnsafe(READ_LEN);
+const fd = fs.openSync(argv[0], 'r');
+if (!fd) {
+  console.error('failed to open file:', argv[0]);
+  process.exit(-1);
+}
+const bytes_read = fs.readSync(fd, read_buffer, 0, READ_LEN, null);
 
-let remainder = data;
+let remainder;
+if (bytes_read === 0) {
+  console.error('no bytes read form file.');
+  process.exit(-2);
+} else {
+  console.log('bytes_read:', bytes_read);
+  // omg i fucking hate node
+  remainder = Buffer.concat([read_buffer], bytes_read);
+  console.log('remainder.length:', remainder.length);
+}
 
-async.whilst(
-  done => done(null, remainder.length > 0),
-  done => {
-    const rlp_ret = rlp.decode(remainder, true);
-    remainder = rlp_ret.remainder;
-    const decoded = rlp_ret.data;
+function _updateRemainder() {
+  let ret;
+  if (remainder.length > 0) {
+    try {
+      const rlp_ret = rlp.decode(remainder, true);
+      if (rlp_ret.data.length > 0) {
+        remainder = rlp_ret.remainder;
+        ret = rlp_ret.data;
+      }
+    } catch (e) {
+      console.error('rlp.decode threw:', e);
+    }
+  }
 
-    const b = new Block(decoded);
-    const block_number = _getInt(b.header.number);
+  return ret;
+}
 
-    const sql = _getBlockSql(b);
+let file_done = false;
+const generateRlpBlock = {
+  // LOL
+  [Symbol.toStringTag]: 'AsyncGenerator',
+  next: () =>
+    new Promise((resolve, reject) => {
+      if (remainder.length === 0 && file_done) {
+        resolve({ done: true });
+      } else if (remainder.length > BUFFER_MIN || file_done) {
+        const data = _updateRemainder();
+        if (data) {
+          resolve({ value: data });
+        } else {
+          resolve({ done: true });
+        }
+      } else {
+        fs.read(fd, read_buffer, 0, READ_LEN, null, (err, bytes_read) => {
+          console.log('read:', err, bytes_read);
+          if (err) {
+            console.error('file read error:', err);
+            reject(err);
+          } else {
+            if (bytes_read === 0) {
+              file_done = true;
+            } else {
+              remainder = Buffer.concat(
+                [remainder, read_buffer],
+                remainder.length + bytes_read
+              );
+            }
 
+            const data = _updateRemainder();
+            if (data) {
+              resolve({ value: data });
+            } else {
+              resolve({ done: true });
+            }
+          }
+        });
+      }
+    }),
+};
+
+let min_block = 2 ** 32;
+let max_block = 0;
+const start_time = Date.now();
+console.log('start_time:', new Date(start_time));
+let block_count = 0;
+let skip_count = 0;
+let insert_count = 0;
+let error_count = 0;
+
+async.eachLimit(
+  generateRlpBlock,
+  PARALLEL_LIMIT,
+  (data, done) => {
+    const b = new Block(data);
+    const block_number = BlockTransform.getInt(b.header.number);
+    min_block = Math.min(min_block, block_number);
+    max_block = Math.max(max_block, block_number);
+    block_count++;
+
+    const sql = BlockTransform.getBlockSql(b);
     db.queryFromPool(sql, [], err => {
       if (err && err.code === '23505') {
+        skip_count++;
         console.log('skip?:', block_number);
-        console.log('err:', err);
-        console.log('sql:', sql);
-        console.log('');
-        console.log('');
-        console.log('');
+        console.log('err:', err.detail ? err.detail : err);
+        //console.log('sql:', sql);
         err = null;
       } else if (err) {
+        error_count++;
         console.log('insert err:', err);
-        console.log('sql:', sql);
+        //console.log('sql:', sql);
       } else {
+        insert_count++;
         console.log('inserted block:', block_number);
       }
       done(err);
     });
   },
   err => {
-    console.log('');
     if (err) {
-      console.log('whilst err:', err);
+      console.log('run err:', err);
     }
+
     db.end(err => {
       if (err) {
         console.log('pool end err:', err);
       }
 
+      const end_time = Date.now();
+      const delta_ms = end_time - start_time;
+
+      console.log('end_time:', new Date(end_time));
+      console.log('delta_ms:', delta_ms);
+      console.log('');
+      console.log('min_block:', min_block);
+      console.log('max_block:', max_block);
+      console.log('');
+      console.log('block_count:', block_count);
+      console.log('insert_count:', insert_count);
+      console.log('skip_count:', skip_count);
+      console.log('error_count:', error_count);
+
+      console.log('');
+      console.log('blocks/second:', (block_count / delta_ms) * 1000);
+      console.log('');
       console.log('done done');
     });
   }
 );
-
-function _getBlockSql(b) {
-  let sql = 'BEGIN;';
-
-  const block_number = _getInt(b.header.number);
-  const base_reward = parseInt(
-    common.paramByBlock('pow', 'minerReward', block_number)
-  );
-  const miner_uncle_extra = Math.floor(base_reward / 32);
-  const uncle_count = b.uncleHeaders ? b.uncleHeaders.length : 0;
-
-  b.transactions.forEach(tx => _calcGasUsed(tx, block_number));
-  const tx_reward = b.transactions.reduce((memo, tx) => memo + tx.fee_wei, 0);
-
-  const miner_reward =
-    base_reward + miner_uncle_extra * uncle_count + tx_reward;
-
-  const block_time = _getTime(b.header.timestamp);
-  const block_hash = b.hash().toString('hex');
-  const parent_hash = b.header.parentHash.toString('hex');
-  const coinbase = b.header.coinbase.toString('hex');
-  const nonce = b.header.nonce.toString('hex');
-  const extra_data = b.header.extraData.toString('hex');
-
-  sql += `
-INSERT INTO block (
-    block_number, block_hash, block_time,
-    miner_address, block_reward_wei, parent_hash,
-    block_nonce, block_extra_data
-  )
-  VALUES (
-    ${block_number}, '\\x${block_hash}', TO_TIMESTAMP(${block_time}),
-    '\\x${coinbase}', ${miner_reward}, '\\x${parent_hash}',
-    '\\x${nonce}', '\\x${extra_data}'
-  );
-`;
-
-  if (block_number === 0) {
-    const state_keys = Object.keys(mainnetGenesisState);
-    state_keys.forEach((key, i) => {
-      const transaction_hash = Buffer.from(`GENESIS_${i}`).toString('hex');
-      const addr = key.slice(2);
-      const value_wei = parseInt(mainnetGenesisState[key].slice(2), 16);
-
-      sql += `
-INSERT INTO transaction (
-    transaction_hash, block_number, block_order,
-    from_address, from_nonce,
-    to_address,
-    value_wei, fee_wei,
-    gas_limit, gas_used, gas_price,
-    tx_success, is_genesis_tx
-  )
-  VALUES (
-    '\\x${transaction_hash}', ${block_number}, ${i},
-    '\\x${GENESIS_ADDR}', ${i},
-    '\\x${addr}',
-    ${value_wei}, 0,
-    0, 0, 0,
-    TRUE, TRUE
-  );
-`;
-
-      sql += `
-INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
-  VALUES ('\\x${addr}','\\x${transaction_hash}',0,${value_wei});
-`;
-    });
-  }
-
-  if (b.transactions.length) {
-    b.transactions.forEach((tx, i) => {
-      const is_contract_create = tx.to.length === 0;
-
-      const transaction_hash = tx.hash().toString('hex');
-      const from_addr = tx.from.toString('hex');
-      const from_nonce = _getInt(tx.nonce);
-      const to_addr = is_contract_create
-        ? CONTRACT_ADDR
-        : tx.to.toString('hex');
-      const input_data =
-        tx.data.length > 0 ? `'\\x${tx.data.toString('hex')}'` : 'NULL';
-      const value_wei = _getInt(tx.value);
-      const gas_limit = tx.gasLimit.readUIntBE(0, tx.gasLimit.length);
-      const { gas_price, gas_used, fee_wei } = tx;
-
-      sql += `
-INSERT INTO transaction (
-    transaction_hash, block_number, block_order,
-    from_address, from_nonce,
-    to_address,
-    value_wei, fee_wei,
-    input_data,
-    gas_limit, gas_used, gas_price,
-    tx_success
-  )
-  VALUES (
-    '\\x${transaction_hash}', ${block_number}, ${i},
-    '\\x${from_addr}', ${from_nonce},
-    '\\x${to_addr}',
-    ${value_wei}, ${fee_wei},
-    ${input_data},
-    ${gas_limit}, ${gas_used}, ${gas_price},
-    TRUE
-  );
-`;
-
-      if (value_wei > 0) {
-        sql += `
-INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
-  VALUES ('\\x${from_addr}','\\x${transaction_hash}',0,${-value_wei - fee_wei});
-`;
-        sql += `
-INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
-  VALUES ('\\x${to_addr}','\\x${transaction_hash}',1,${value_wei});
-`;
-      }
-      if (is_contract_create) {
-        const data_hash = crypto
-          .createHash('sha256')
-          .update(tx.data)
-          .digest('hex');
-        const contract_address = EthUtil.generateAddress(
-          tx.from,
-          tx.nonce
-        ).toString('hex');
-
-        sql += `
-INSERT INTO contract (
-  contract_address, transaction_hash,
-  contract_data, contract_data_hash
-  )
-  VALUES (
-    '\\x${contract_address}', '\\x${transaction_hash}',
-    ${input_data}, '\\x${data_hash}'
-  );
-`;
-      }
-    });
-  }
-
-  const block_reward_hash = Buffer.from(
-    `BLOCK_REWARD_${block_number}`
-  ).toString('hex');
-
-  sql += `
-INSERT INTO transaction (
-    transaction_hash, block_number, block_order,
-    from_address, from_nonce,
-    to_address,
-    value_wei, fee_wei,
-    gas_limit, gas_used, gas_price,
-    tx_success, is_block_reward
-  )
-  VALUES (
-    '\\x${block_reward_hash}', ${block_number}, ${BLOCK_REWARD_ORDER},
-    '\\x${BLOCK_REWARD_ADDR}', ${block_number},
-    '\\x${coinbase}',
-    ${miner_reward}, 0,
-    0, 0, 0,
-    TRUE, TRUE
-  );
-`;
-
-  sql += `
-INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
-  VALUES ('\\x${coinbase}','\\x${block_reward_hash}',0,${miner_reward});
-`;
-
-  if (uncle_count > 0) {
-    b.uncleHeaders.forEach((header, i) => {
-      const uncle_number = header.number.readUIntBE(0, header.number.length);
-      const delta = block_number - uncle_number;
-      const uncle_reward = Math.floor((base_reward * (8 - delta)) / 8);
-
-      const uncle_hash = header.hash().toString('hex');
-      const uncle_time = _getTime(header.timestamp);
-      const uncle_addr = header.coinbase.toString('hex');
-      const uncle_parent = header.parentHash.toString('hex');
-      const uncle_nonce = header.nonce.toString('hex');
-      const uncle_extra = header.extraData.toString('hex');
-
-      sql += `
-INSERT INTO uncle (
-    uncle_hash,
-    block_number, block_time,
-    miner_address, block_reward_wei, parent_hash,
-    block_nonce, block_extra_data
-  )
-  VALUES (
-    '\\x${uncle_hash}',
-    ${block_number}, TO_TIMESTAMP(${uncle_time}),
-    '\\x${uncle_addr}', ${uncle_reward}, '\\x${uncle_parent}',
-    '\\x${uncle_nonce}', '\\x${uncle_extra}'
-  );
-`;
-
-      const uncle_reward_hash = Buffer.from(
-        `UNCLE_REWARD_${block_number}_${i}`
-      ).toString('hex');
-      const uncle_reward_addr = Buffer.from(`UNCLE_REWARD_${i}`).toString(
-        'hex'
-      );
-
-      sql += `
-INSERT INTO transaction (
-    transaction_hash, block_number, block_order,
-    from_address, from_nonce,
-    to_address,
-    value_wei, fee_wei,
-    gas_limit, gas_used, gas_price,
-    tx_success, is_uncle_reward
-  )
-  VALUES (
-    '\\x${uncle_reward_hash}', ${block_number}, ${UNCLE_REWARD_ORDER + i},
-    '\\x${uncle_reward_addr}', ${block_number},
-    '\\x${uncle_addr}',
-    ${uncle_reward}, 0,
-    0, 0, 0,
-    TRUE, TRUE
-  );
-`;
-
-      sql += `
-INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
-  VALUES ('\\x${uncle_addr}','\\x${uncle_reward_hash}',0,${uncle_reward});
-`;
-    });
-  }
-  sql += 'COMMIT;';
-
-  return sql;
-}
-
-function _calcGasUsed(tx, block_number) {
-  let used = common.paramByBlock('gasPrices', 'tx', block_number);
-  const data_len = tx.data.length;
-  if (data_len > 0) {
-    const zero_cost = common.paramByBlock(
-      'gasPrices',
-      'txDataZero',
-      block_number
-    );
-    const one_cost = common.paramByBlock(
-      'gasPrices',
-      'txDataNonZero',
-      block_number
-    );
-    for (let i = 0; i < data_len; i++) {
-      used += tx.data[i] === 0 ? zero_cost : one_cost;
-    }
-  }
-  tx.gas_used = used;
-  tx.gas_price = tx.gasPrice.readUIntBE(0, tx.gasPrice.length);
-  tx.fee_wei = used * tx.gas_price;
-}
-
-function _getTime(buf) {
-  return buf.length > 0 ? buf.readUInt32BE(0) : 0;
-}
-
-function _getInt(buf) {
-  let ret = 0;
-  if (buf.length > 0) {
-    ret = buf.readUIntBE(0, buf.length);
-  }
-  return ret;
-}
