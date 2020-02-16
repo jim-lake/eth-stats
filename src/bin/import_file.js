@@ -2,6 +2,7 @@
 
 const async = require('async');
 const db = require('../tools/pg_db');
+const Common = require('ethereumjs-common').default;
 const rlp = require('rlp');
 const Block = require('ethereumjs-block');
 const fs = require('fs');
@@ -18,6 +19,8 @@ const only_block = argv['only-block'];
 const skip_until = argv['skip-until'] || 0;
 const run_quiet = argv['quiet'] || false;
 const input_file = argv._[0];
+
+const common = new Common('mainnet');
 
 console.log('input file:', input_file);
 console.log('delete blocks before insert:', delete_blocks);
@@ -65,13 +68,16 @@ function _updateRemainder() {
   return ret;
 }
 
+let really_done = false;
 let file_done = false;
 const generateRlpBlock = {
   // LOL
   [Symbol.toStringTag]: 'AsyncGenerator',
   next: () =>
     new Promise((resolve, reject) => {
-      if (remainder.length === 0 && file_done) {
+      if (really_done) {
+        resolve({ done: true });
+      } else if (remainder.length === 0 && file_done) {
         resolve({ done: true });
       } else if (remainder.length > BUFFER_MIN || file_done) {
         const data = _updateRemainder();
@@ -121,10 +127,15 @@ async.eachLimit(
   generateRlpBlock,
   PARALLEL_LIMIT,
   (data, done) => {
-    const b = new Block(data);
-    const block_number = BlockTransform.getInt(b.header.number);
+    const block_number = BlockTransform.getInt(data[0][8]);
+    const hardfork = common.activeHardfork(block_number);
+    const block_common = new Common('mainnet',hardfork);
+    const b = new Block(data,{ common: block_common });
 
-    if (only_block !== undefined && only_block !== block_number) {
+    if (only_block !== undefined && block_number > only_block) {
+      really_done = true;
+      done();
+    } else if (only_block !== undefined && only_block !== block_number) {
       skip_count++;
       setImmediate(done);
     } else if (block_number < skip_until) {
