@@ -1,8 +1,10 @@
 'use strict';
 
 const async = require('async');
+const crypto = require('crypto');
 const db = require('../tools/pg_db.js');
 const rlp = require('rlp');
+const EthUtil = require('ethereumjs-util');
 const Common = require('ethereumjs-common').default;
 const mainnetGenesisState = require('ethereumjs-common/dist/genesisStates/mainnet');
 const Block = require('ethereumjs-block');
@@ -12,6 +14,7 @@ const argv = process.argv.slice(2);
 
 const GENESIS_ADDR = Buffer.from('GENESIS').toString('hex');
 const BLOCK_REWARD_ADDR = Buffer.from('BLOCK_REWARD').toString('hex');
+const CONTRACT_ADDR = Buffer.from('CONTRACT_CREATE').toString('hex');
 const BLOCK_REWARD_ORDER = 2 ** 30;
 const UNCLE_REWARD_ORDER = BLOCK_REWARD_ORDER + 1;
 
@@ -30,10 +33,8 @@ async.whilst(
     const decoded = rlp_ret.data;
 
     const b = new Block(decoded);
-    let block_number = 0;
-    if (b.header.number.length > 0) {
-      block_number = b.header.number.readUIntBE(0, b.header.number.length);
-    }
+    const block_number = _getInt(b.header.number);
+
     const sql = _getBlockSql(b);
 
     db.queryFromPool(sql, [], err => {
@@ -72,10 +73,7 @@ async.whilst(
 function _getBlockSql(b) {
   let sql = 'BEGIN;';
 
-  let block_number = 0;
-  if (b.header.number.length > 0) {
-    block_number = b.header.number.readUIntBE(0, b.header.number.length);
-  }
+  const block_number = _getInt(b.header.number);
   const base_reward = parseInt(
     common.paramByBlock('pow', 'minerReward', block_number)
   );
@@ -88,8 +86,7 @@ function _getBlockSql(b) {
   const miner_reward =
     base_reward + miner_uncle_extra * uncle_count + tx_reward;
 
-  const block_time =
-    b.header.timestamp.length > 0 ? b.header.timestamp.readUInt32BE(0) : 0;
+  const block_time = _getTime(b.header.timestamp);
   const block_hash = b.hash().toString('hex');
   const parent_hash = b.header.parentHash.toString('hex');
   const coinbase = b.header.coinbase.toString('hex');
@@ -108,8 +105,6 @@ INSERT INTO block (
     '\\x${nonce}', '\\x${extra_data}'
   );
 `;
-
-  let block_order = 0;
 
   if (block_number === 0) {
     const state_keys = Object.keys(mainnetGenesisState);
@@ -136,7 +131,6 @@ INSERT INTO transaction (
     TRUE, TRUE
   );
 `;
-      block_order++;
 
       sql += `
 INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
@@ -147,11 +141,17 @@ INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_we
 
   if (b.transactions.length) {
     b.transactions.forEach((tx, i) => {
+      const is_contract_create = tx.to.length === 0;
+
       const transaction_hash = tx.hash().toString('hex');
       const from_addr = tx.from.toString('hex');
-      const from_nonce = tx.nonce.readUIntBE(0, tx.nonce.length);
-      const to_addr = tx.to.toString('hex');
-      const value_wei = tx.value.readUIntBE(0, tx.value.length);
+      const from_nonce = _getInt(tx.nonce);
+      const to_addr = is_contract_create
+        ? CONTRACT_ADDR
+        : tx.to.toString('hex');
+      const input_data =
+        tx.data.length > 0 ? `'\\x${tx.data.toString('hex')}'` : 'NULL';
+      const value_wei = _getInt(tx.value);
       const gas_limit = tx.gasLimit.readUIntBE(0, tx.gasLimit.length);
       const { gas_price, gas_used, fee_wei } = tx;
 
@@ -161,6 +161,7 @@ INSERT INTO transaction (
     from_address, from_nonce,
     to_address,
     value_wei, fee_wei,
+    input_data,
     gas_limit, gas_used, gas_price,
     tx_success
   )
@@ -169,6 +170,7 @@ INSERT INTO transaction (
     '\\x${from_addr}', ${from_nonce},
     '\\x${to_addr}',
     ${value_wei}, ${fee_wei},
+    ${input_data},
     ${gas_limit}, ${gas_used}, ${gas_price},
     TRUE
   );
@@ -184,9 +186,27 @@ INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_we
   VALUES ('\\x${to_addr}','\\x${transaction_hash}',1,${value_wei});
 `;
       }
+      if (is_contract_create) {
+        const data_hash = crypto
+          .createHash('sha256')
+          .update(tx.data)
+          .digest('hex');
+        const contract_address = EthUtil.generateAddress(
+          tx.from,
+          tx.nonce
+        ).toString('hex');
 
-      console.log('--------');
-      console.log('');
+        sql += `
+INSERT INTO contract (
+  contract_address, transaction_hash,
+  contract_data, contract_data_hash
+  )
+  VALUES (
+    '\\x${contract_address}', '\\x${transaction_hash}',
+    ${input_data}, '\\x${data_hash}'
+  );
+`;
+      }
     });
   }
 
@@ -212,7 +232,6 @@ INSERT INTO transaction (
     TRUE, TRUE
   );
 `;
-  block_order++;
 
   sql += `
 INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
@@ -225,9 +244,8 @@ INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_we
       const delta = block_number - uncle_number;
       const uncle_reward = Math.floor((base_reward * (8 - delta)) / 8);
 
-      const uncle_hash = header.uncleHash.toString('hex');
-      const uncle_time =
-        header.timestamp.length > 0 ? header.timestamp.readUInt32BE(0) : 0;
+      const uncle_hash = header.hash().toString('hex');
+      const uncle_time = _getTime(header.timestamp);
       const uncle_addr = header.coinbase.toString('hex');
       const uncle_parent = header.parentHash.toString('hex');
       const uncle_nonce = header.nonce.toString('hex');
@@ -273,7 +291,6 @@ INSERT INTO transaction (
     TRUE, TRUE
   );
 `;
-      block_order++;
 
       sql += `
 INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
@@ -290,11 +307,33 @@ function _calcGasUsed(tx, block_number) {
   let used = common.paramByBlock('gasPrices', 'tx', block_number);
   const data_len = tx.data.length;
   if (data_len > 0) {
-    used +=
-      data_len *
-      common.paramByBlock('gasPrices', 'txDataNonZero', block_number);
+    const zero_cost = common.paramByBlock(
+      'gasPrices',
+      'txDataZero',
+      block_number
+    );
+    const one_cost = common.paramByBlock(
+      'gasPrices',
+      'txDataNonZero',
+      block_number
+    );
+    for (let i = 0; i < data_len; i++) {
+      used += tx.data[i] === 0 ? zero_cost : one_cost;
+    }
   }
   tx.gas_used = used;
   tx.gas_price = tx.gasPrice.readUIntBE(0, tx.gasPrice.length);
   tx.fee_wei = used * tx.gas_price;
+}
+
+function _getTime(buf) {
+  return buf.length > 0 ? buf.readUInt32BE(0) : 0;
+}
+
+function _getInt(buf) {
+  let ret = 0;
+  if (buf.length > 0) {
+    ret = buf.readUIntBE(0, buf.length);
+  }
+  return ret;
 }
