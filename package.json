@@ -6,7 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "lint": "eslint src",
-    "pretty": "prettier src"
+    "pretty": "prettier  --write src/**/*.js"
   },
   "repository": {
     "type": "git",
@@ -17,5 +17,10 @@
   },
   "license": "MIT",
   "dependencies": {
+    "async": "^3.1.1",
+    "ethereumjs-block": "^2.2.2",
+    "ethereumjs-common": "^1.5.0",
+    "pg": "^7.18.1",
+    "rlp": "^2.2.4"
   }
 }
