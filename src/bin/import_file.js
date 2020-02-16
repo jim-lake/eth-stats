@@ -16,6 +16,7 @@ const READ_LEN = BUFFER_MIN * 2;
 const delete_blocks = argv['delete-blocks'] || false;
 const only_block = argv['only-block'];
 const skip_until = argv['skip-until'] || 0;
+const run_quiet = argv['quiet'] || false;
 const input_file = argv._[0];
 
 console.log('input file:', input_file);
@@ -196,8 +197,8 @@ function _importBlock(block_number, b, done) {
           db.queryFromPool(sql, [], err => {
             if (err && err.code === '23505') {
               skip_count++;
-              console.log('skip?:', block_number);
-              console.log('err:', err.detail ? err.detail : err);
+              _maybeLog('skip?:', block_number);
+              _maybeLog('err:', err.detail ? err.detail : err);
               //console.log('sql:', sql);
               err = null;
             } else if (err) {
@@ -206,7 +207,7 @@ function _importBlock(block_number, b, done) {
               //console.log('sql:', sql);
             } else {
               insert_count++;
-              console.log('inserted block:', block_number);
+              _maybeLog('inserted block:', block_number);
             }
             done(err);
           });
@@ -218,5 +219,11 @@ function _importBlock(block_number, b, done) {
     console.error(`block(${block_number}) threw:`, e);
     error_count++;
     done(e);
+  }
+}
+
+function _maybeLog(...args) {
+  if (!run_quiet) {
+    console.log(...args);
   }
 }
