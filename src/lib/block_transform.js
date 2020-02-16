@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const EthUtil = require('ethereumjs-util');
+const BN = require('bn.js');
 const Common = require('ethereumjs-common').default;
 const mainnetGenesisState = require('ethereumjs-common/dist/genesisStates/mainnet');
 
@@ -18,17 +19,21 @@ function getBlockSql(b) {
   let sql = 'BEGIN;';
 
   const block_number = _getInt(b.header.number);
-  const base_reward = parseInt(
+  const base_reward = new BN(
     common.paramByBlock('pow', 'minerReward', block_number)
   );
-  const miner_uncle_extra = Math.floor(base_reward / 32);
   const uncle_count = b.uncleHeaders ? b.uncleHeaders.length : 0;
 
-  b.transactions.forEach(tx => _calcGasUsed(tx, block_number));
-  const tx_reward = b.transactions.reduce((memo, tx) => memo + tx.fee_wei, 0);
+  const miner_reward = base_reward.clone();
+  if (uncle_count > 0) {
+    const miner_uncle_extra = new BN(uncle_count);
+    miner_uncle_extra.imul(base_reward);
+    miner_uncle_extra.idivn(32);
 
-  const miner_reward =
-    base_reward + miner_uncle_extra * uncle_count + tx_reward;
+    miner_reward.iadd(miner_uncle_extra);
+  }
+  b.transactions.forEach(tx => _calcGasUsed(tx, block_number));
+  b.transactions.forEach(tx => miner_reward.iadd(tx.fee_wei));
 
   const block_time = _getTime(b.header.timestamp);
   const block_hash = b.hash().toString('hex');
@@ -95,8 +100,8 @@ INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_we
         : tx.to.toString('hex');
       const input_data =
         tx.data.length > 0 ? `'\\x${tx.data.toString('hex')}'` : 'NULL';
-      const value_wei = _getInt(tx.value);
-      const gas_limit = tx.gasLimit.readUIntBE(0, tx.gasLimit.length);
+      const value_wei = new BN(tx.value);
+      const gas_limit = _getInt(tx.gasLimit);
       const { gas_price, gas_used, fee_wei } = tx;
 
       sql += `
@@ -120,11 +125,13 @@ INSERT INTO transaction (
   );
 `;
 
-      if (value_wei > 0) {
-        sql += `
+      sql += `
 INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
-  VALUES ('\\x${from_addr}','\\x${transaction_hash}',0,${-value_wei - fee_wei});
+  VALUES ('\\x${from_addr}','\\x${transaction_hash}',0,-${value_wei.add(
+        fee_wei
+      )});
 `;
+      if (value_wei) {
         sql += `
 INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
   VALUES ('\\x${to_addr}','\\x${transaction_hash}',1,${value_wei});
@@ -266,8 +273,8 @@ function _calcGasUsed(tx, block_number) {
     }
   }
   tx.gas_used = used;
-  tx.gas_price = tx.gasPrice.readUIntBE(0, tx.gasPrice.length);
-  tx.fee_wei = used * tx.gas_price;
+  tx.gas_price = _getInt(tx.gasPrice);
+  tx.fee_wei = new BN(tx.gas_price).imuln(used);
 }
 
 function _getTime(buf) {
@@ -276,7 +283,9 @@ function _getTime(buf) {
 
 function _getInt(buf) {
   let ret = 0;
-  if (buf.length > 0) {
+  if (buf.length > 6) {
+    ret = new BN(buf);
+  } else if (buf.length > 0) {
     ret = buf.readUIntBE(0, buf.length);
   }
   return ret;

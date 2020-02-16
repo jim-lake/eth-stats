@@ -49,7 +49,7 @@ function queryFromPool(opts, values, done) {
         err = 'bad_result_format';
       }
     }
-    done(err, results);
+    done(err, results, result);
   });
 }
 function queryFromPoolWithConnection(opts, values, done) {
@@ -110,7 +110,7 @@ function query(client, sql, values, done) {
         err = 'bad_result_format';
       }
     }
-    done(err, results);
+    done(err, results, result);
   });
 }
 

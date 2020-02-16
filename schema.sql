@@ -69,6 +69,20 @@ CREATE TABLE public.block (
 ALTER TABLE public.block OWNER TO root;
 
 --
+-- Name: contract; Type: TABLE; Schema: public; Owner: root
+--
+
+CREATE TABLE public.contract (
+    contract_address bytea NOT NULL,
+    transaction_hash bytea NOT NULL,
+    contract_data bytea NOT NULL,
+    contract_data_hash bytea NOT NULL
+);
+
+
+ALTER TABLE public.contract OWNER TO root;
+
+--
 -- Name: transaction; Type: TABLE; Schema: public; Owner: root
 --
 
@@ -126,6 +140,14 @@ ALTER TABLE ONLY public.address_ledger
 
 ALTER TABLE ONLY public.block
     ADD CONSTRAINT block_pkey PRIMARY KEY (block_number);
+
+
+--
+-- Name: contract contract_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+--
+
+ALTER TABLE ONLY public.contract
+    ADD CONSTRAINT contract_pkey PRIMARY KEY (contract_address);
 
 
 --
@@ -192,6 +214,14 @@ CREATE INDEX to_address ON public.transaction USING btree (to_address);
 
 ALTER TABLE ONLY public.address_ledger
     ADD CONSTRAINT address_ledger_transaction_hash_fkey FOREIGN KEY (transaction_hash) REFERENCES public.transaction(transaction_hash) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: contract contract_transaction_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: root
+--
+
+ALTER TABLE ONLY public.contract
+    ADD CONSTRAINT contract_transaction_hash_fkey FOREIGN KEY (transaction_hash) REFERENCES public.transaction(transaction_hash) ON UPDATE CASCADE ON DELETE CASCADE;
 
 
 --
