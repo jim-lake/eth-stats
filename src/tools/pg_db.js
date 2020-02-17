@@ -19,10 +19,13 @@ exports.rollback = rollback;
 exports.buildQuery = buildQuery;
 
 function init(params) {
-  const opts = Object.assign({}, params, {
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
-  });
+  const opts = Object.assign(
+    {
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    },
+    params
+  );
   pg.defaults.parseInt8 = true;
   db_pool = new pg.Pool(opts);
   db_pool.on('error', _onPoolError);

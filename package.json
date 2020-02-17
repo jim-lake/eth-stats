@@ -6,7 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "lint": "eslint src",
-    "pretty": "prettier  --write src/**/*.js"
+    "pretty": "prettier  --write src/*.js src/**/*.js"
   },
   "repository": {
     "type": "git",
@@ -19,11 +19,21 @@
   "dependencies": {
     "async": "^3.1.1",
     "bn.js": "^5.1.1",
+    "body-parser": "^1.19.0",
+    "connect-multiparty": "^2.2.0",
+    "cookie-parser": "^1.4.4",
+    "errorhandler": "^1.5.1",
     "ethereumjs-block": "^2.2.2",
     "ethereumjs-common": "^1.5.0",
     "ethereumjs-util": "^6.2.0",
+    "express": "^4.17.1",
+    "lodash": "^4.17.15",
+    "method-override": "^3.0.0",
+    "morgan": "^1.9.1",
+    "node-config-sets": "0.0.1",
     "pg": "^7.18.1",
     "rlp": "^2.2.4",
+    "secp256k1": "^3.8.0",
     "yargs": "^15.1.0"
   }
 }

@@ -1,4 +1,4 @@
 {
   "ignore": ["scripts/*"],
-  "exec": "npm run lint && node --harmony app.js"
+  "exec": "npm run lint && node src/server.js"
 }

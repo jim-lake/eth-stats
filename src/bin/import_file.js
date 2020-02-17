@@ -33,7 +33,14 @@ if (skip_until) {
 }
 console.log('');
 
-db.init(config.db);
+const db_opts = Object.assign(
+  {
+    idleTimeoutMillis: 120000,
+    connectionTimeoutMillis: 30000,
+  },
+  config.db
+);
+db.init(db_opts);
 
 const read_buffer = Buffer.allocUnsafe(READ_LEN);
 const fd = fs.openSync(input_file, 'r');
