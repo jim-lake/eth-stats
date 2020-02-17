@@ -18,6 +18,7 @@ const delete_blocks = argv['delete-blocks'] || false;
 const only_block = argv['only-block'];
 const skip_until = argv['skip-until'] || 0;
 const run_quiet = argv['quiet'] || false;
+const run_silent = argv['silent'] || false;
 const input_file = argv._[0];
 
 const common = new Common('mainnet');
@@ -129,8 +130,8 @@ async.eachLimit(
   (data, done) => {
     const block_number = BlockTransform.getInt(data[0][8]);
     const hardfork = common.activeHardfork(block_number);
-    const block_common = new Common('mainnet',hardfork);
-    const b = new Block(data,{ common: block_common });
+    const block_common = new Common('mainnet', hardfork);
+    const b = new Block(data, { common: block_common });
 
     if (only_block !== undefined && block_number > only_block) {
       really_done = true;
@@ -150,6 +151,7 @@ async.eachLimit(
     }
   },
   err => {
+    console.log('');
     if (err) {
       console.log('run err:', err);
     }
@@ -210,16 +212,23 @@ function _importBlock(block_number, b, done) {
               skip_count++;
               _maybeLog('skip?:', block_number);
               _maybeLog('err:', err.detail ? err.detail : err);
+              _maybeLogDot('S');
               //console.log('sql:', sql);
               err = null;
             } else if (err) {
               error_count++;
               console.error('insert err:', err.detail ? err.detail : err);
-              console.error("failed block:", block_number);
+              console.error('failed block:', block_number);
+              _maybeLogDot('E');
               //console.log('sql:', sql);
             } else {
               insert_count++;
               _maybeLog('inserted block:', block_number);
+              if (delete_blocks) {
+                _maybeLogDot('R');
+              } else {
+                _maybeLogDot('+');
+              }
             }
             done(err);
           });
@@ -228,6 +237,7 @@ function _importBlock(block_number, b, done) {
       done
     );
   } catch (e) {
+    console.log('');
     console.error(`block(${block_number}) threw:`, e);
     error_count++;
     done(e);
@@ -237,5 +247,10 @@ function _importBlock(block_number, b, done) {
 function _maybeLog(...args) {
   if (!run_quiet) {
     console.log(...args);
+  }
+}
+function _maybeLogDot(dot) {
+  if (run_quiet && !run_silent) {
+    process.stdout.write(dot);
   }
 }
