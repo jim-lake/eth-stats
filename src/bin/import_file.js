@@ -214,7 +214,8 @@ function _importBlock(block_number, b, done) {
               err = null;
             } else if (err) {
               error_count++;
-              console.error('insert err:', err);
+              console.error('insert err:', err.detail ? err.detail : err);
+              console.error("failed block:", block_number);
               //console.log('sql:', sql);
             } else {
               insert_count++;
