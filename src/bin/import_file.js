@@ -1,25 +1,30 @@
 'use strict';
 
 const async = require('async');
-const db = require('../tools/pg_db');
+const real_db = require('../tools/pg_db');
+const fake_db = require('../tools/fake_db');
 const Common = require('ethereumjs-common').default;
 const rlp = require('rlp');
 const Block = require('ethereumjs-block');
 const fs = require('fs');
 const config = require('../../config.json');
 const BlockTransform = require('../lib/block_transform');
+const util = require('../tools/util');
+const timer = require('../tools/timer');
 const argv = require('yargs').argv;
 
 const PARALLEL_LIMIT = 10;
 const BUFFER_MIN = 10000000;
 const READ_LEN = BUFFER_MIN * 2;
+const PERIODIC_PRINT = 60 * 1000;
 
 const delete_blocks = argv['delete-blocks'] || false;
 const only_block = argv['only-block'];
 const skip_until = argv['skip-until'] || 0;
-const run_quiet = argv['quiet'] || false;
 const run_silent = argv['silent'] || false;
+const run_quiet = argv['quiet'] || run_silent;
 const input_file = argv._[0];
+const fake_db_file = argv['fake-db'];
 
 const common = new Common('mainnet');
 
@@ -31,16 +36,24 @@ if (only_block !== undefined) {
 if (skip_until) {
   console.log('skip blocks until block number:', skip_until);
 }
-console.log('');
 
-const db_opts = Object.assign(
-  {
-    idleTimeoutMillis: 120000,
-    connectionTimeoutMillis: 30000,
-  },
-  config.db
-);
-db.init(db_opts);
+let db;
+if (fake_db_file) {
+  console.log('fake db file:', fake_db_file);
+  db = fake_db;
+  fake_db.init({ file: fake_db_file });
+} else {
+  db = real_db;
+  const db_opts = Object.assign(
+    {
+      idleTimeoutMillis: 120000,
+      connectionTimeoutMillis: 30000,
+    },
+    config.db
+  );
+  db.init(db_opts);
+}
+console.log('');
 
 const read_buffer = Buffer.allocUnsafe(READ_LEN);
 const fd = fs.openSync(input_file, 'r');
@@ -63,7 +76,9 @@ function _updateRemainder() {
   let ret;
   if (remainder.length > 0) {
     try {
+      const t = timer.start();
       const rlp_ret = rlp.decode(remainder, true);
+      timer.end(t, 'rlp-decode');
       if (rlp_ret.data.length > 0) {
         remainder = rlp_ret.remainder;
         ret = rlp_ret.data;
@@ -95,7 +110,9 @@ const generateRlpBlock = {
           resolve({ done: true });
         }
       } else {
+        const t = timer.start();
         fs.read(fd, read_buffer, 0, READ_LEN, null, (err, bytes_read) => {
+          timer.end(t, 'fs-read');
           if (err) {
             console.error('file read error:', err);
             reject(err);
@@ -168,24 +185,7 @@ async.eachLimit(
         console.log('pool end err:', err);
       }
 
-      const end_time = Date.now();
-      const delta_ms = end_time - start_time;
-
-      console.log('end_time:', new Date(end_time));
-      console.log('delta_ms:', delta_ms);
-      console.log('');
-      console.log('min_block:', min_block);
-      console.log('max_block:', max_block);
-      console.log('');
-      console.log('block_count:', block_count);
-      console.log('delete_count:', delete_count);
-      console.log('insert_count:', insert_count);
-      console.log('skip_count:', skip_count);
-      console.log('error_count:', error_count);
-
-      console.log('');
-      console.log('blocks/second:', (block_count / delta_ms) * 1000);
-      console.log('');
+      _periodicStats(true);
       console.log('done done');
     });
   }
@@ -195,7 +195,9 @@ function _importBlock(block_number, b, done) {
   let sql;
 
   try {
+    const t = timer.start();
     sql = BlockTransform.getBlockSql(b);
+    timer.end(t, 'get-sql');
     async.series(
       [
         done => {
@@ -214,7 +216,9 @@ function _importBlock(block_number, b, done) {
           }
         },
         done => {
+          const t = timer.start();
           db.queryFromPool(sql, [], err => {
+            timer.end(t, 'db-insert');
             if (err && err.code === '23505') {
               skip_count++;
               _maybeLog('skip?:', block_number);
@@ -237,6 +241,7 @@ function _importBlock(block_number, b, done) {
                 _maybeLogDot('+');
               }
             }
+            _periodicStats();
             done(err);
           });
         },
@@ -248,6 +253,46 @@ function _importBlock(block_number, b, done) {
     console.error(`block(${block_number}) threw:`, e);
     error_count++;
     done(e);
+  }
+}
+
+let last_stats = Date.now();
+function _periodicStats(force) {
+  const now = Date.now();
+  const delta = now - last_stats;
+  if (force || delta > PERIODIC_PRINT) {
+    last_stats = now;
+    const now_time = Date.now();
+    const delta_ms = now_time - start_time;
+
+    console.log('');
+    console.log('--------');
+    console.log('now_time:', new Date(now_time));
+    console.log('delta_ms:', util.timeFormat(delta_ms));
+    console.log('fs-read:', timer.getString('fs-read'));
+    console.log('rlp-decode:', timer.getString('rlp-decode'));
+    console.log('get-sql:', timer.getString('get-sql'));
+    console.log('tx-miner-reward:', timer.getString('tx-miner-reward'));
+    console.log('tx-from:', timer.getString('tx-from'));
+    console.log('raw db-insert:', timer.getString('db-insert'));
+    console.log(
+      `db-insert/${PARALLEL_LIMIT}:`,
+      timer.getString('db-insert', PARALLEL_LIMIT)
+    );
+    console.log('');
+    console.log('min_block:', min_block);
+    console.log('max_block:', max_block);
+    console.log('');
+    console.log('block_count:', block_count);
+    console.log('delete_count:', delete_count);
+    console.log('insert_count:', insert_count);
+    console.log('skip_count:', skip_count);
+    console.log('error_count:', error_count);
+
+    console.log('');
+    console.log('blocks/second:', (block_count / delta_ms) * 1000);
+    console.log('--------');
+    console.log('');
   }
 }
 

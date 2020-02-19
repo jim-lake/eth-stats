@@ -7,6 +7,9 @@ module.exports = {
   "parserOptions": {
     "ecmaVersion": 2018,
   },
+  "globals": {
+    "BigInt": true,
+  },
   "rules": {
     "indent": 0,
     "linebreak-style": [

@@ -1,6 +1,9 @@
+'use strict';
 const crypto = require('crypto');
-const EthUtil = require('ethereumjs-util');
+const timer = require('../tools/timer.js');
+
 const BN = require('bn.js');
+const EthUtil = require('ethereumjs-util');
 const Common = require('ethereumjs-common').default;
 const mainnetGenesisState = require('ethereumjs-common/dist/genesisStates/mainnet');
 
@@ -24,6 +27,7 @@ function getBlockSql(b) {
   );
   const uncle_count = b.uncleHeaders ? b.uncleHeaders.length : 0;
 
+  const t = timer.start();
   const miner_reward = base_reward.clone();
   if (uncle_count > 0) {
     const miner_uncle_extra = new BN(uncle_count);
@@ -34,6 +38,7 @@ function getBlockSql(b) {
   }
   b.transactions.forEach(tx => _calcGasUsed(tx, block_number));
   b.transactions.forEach(tx => miner_reward.iadd(tx.fee_wei));
+  timer.end(t, 'tx-miner-reward');
 
   const block_time = _getTime(b.header.timestamp);
   const block_hash = b.hash().toString('hex');
@@ -93,7 +98,11 @@ INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_we
       const is_contract_create = tx.to.length === 0;
 
       const transaction_hash = tx.hash().toString('hex');
+
+      const t = timer.start();
       const from_addr = tx.from.toString('hex');
+      timer.end(t, 'tx-from');
+
       const from_nonce = _getInt(tx.nonce);
       const to_addr = is_contract_create
         ? CONTRACT_ADDR

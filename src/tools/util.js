@@ -46,6 +46,7 @@ exports.mapGet = mapGet;
 exports.getTime = getTime;
 exports.setSyncTimeout = setSyncTimeout;
 exports.pad = pad;
+exports.timeFormat = timeFormat;
 
 let g_remoteLogFunc = null;
 function setRemoteLog(func) {
@@ -431,4 +432,32 @@ function pad(source, length) {
     s = '0' + s;
   }
   return s;
+}
+function timeFormat(time) {
+  let seconds = Math.round(time / 1000);
+
+  let hours = 0;
+  let days = 0;
+  let minutes = 0;
+  if (seconds > 60) {
+    minutes = Math.floor(seconds / 60);
+    seconds -= minutes * 60;
+  }
+  if (minutes > 60) {
+    hours = Math.floor(minutes / 60);
+    minutes -= hours * 60;
+  }
+  if (hours > 24) {
+    days = Math.floor(hours / 24);
+    hours -= days * 24;
+  }
+
+  let ret;
+  if (days > 0) {
+    ret = days + 'd ' + pad(hours) + ':' + pad(minutes) + ':' + pad(seconds);
+  } else {
+    ret = pad(hours) + ':' + pad(minutes) + ':' + pad(seconds);
+  }
+
+  return ret;
 }
