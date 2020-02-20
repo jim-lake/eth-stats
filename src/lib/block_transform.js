@@ -19,7 +19,7 @@ exports.getBlockSql = getBlockSql;
 exports.getInt = _getInt;
 
 function getBlockSql(b) {
-  let sql = 'BEGIN;';
+  let sql = '';
 
   const block_number = _getInt(b.header.number);
   const base_reward = new BN(
@@ -85,11 +85,6 @@ INSERT INTO transaction (
     TRUE, TRUE
   );
 `;
-
-      sql += `
-INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
-  VALUES ('\\x${addr}','\\x${transaction_hash}',0,${value_wei});
-`;
     });
   }
 
@@ -133,19 +128,6 @@ INSERT INTO transaction (
     TRUE
   );
 `;
-
-      sql += `
-INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
-  VALUES ('\\x${from_addr}','\\x${transaction_hash}',0,-${value_wei.add(
-        fee_wei
-      )});
-`;
-      if (value_wei) {
-        sql += `
-INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
-  VALUES ('\\x${to_addr}','\\x${transaction_hash}',1,${value_wei});
-`;
-      }
       if (is_contract_create) {
         const data_hash = crypto
           .createHash('sha256')
@@ -169,34 +151,6 @@ INSERT INTO contract (
       }
     });
   }
-
-  const block_reward_hash = Buffer.from(
-    `BLOCK_REWARD_${block_number}`
-  ).toString('hex');
-
-  sql += `
-INSERT INTO transaction (
-    transaction_hash, block_number, block_order,
-    from_address, from_nonce,
-    to_address,
-    value_wei, fee_wei,
-    gas_limit, gas_used, gas_price,
-    tx_success, is_block_reward
-  )
-  VALUES (
-    '\\x${block_reward_hash}', ${block_number}, ${BLOCK_REWARD_ORDER},
-    '\\x${BLOCK_REWARD_ADDR}', ${block_number},
-    '\\x${coinbase}',
-    ${miner_reward}, 0,
-    0, 0, 0,
-    TRUE, TRUE
-  );
-`;
-
-  sql += `
-INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
-  VALUES ('\\x${coinbase}','\\x${block_reward_hash}',0,${miner_reward});
-`;
 
   if (uncle_count > 0) {
     b.uncleHeaders.forEach((header, i) => {
@@ -225,41 +179,11 @@ INSERT INTO uncle (
     '\\x${uncle_nonce}', '\\x${uncle_extra}'
   );
 `;
-
-      const uncle_reward_hash = Buffer.from(
-        `UNCLE_REWARD_${block_number}_${i}`
-      ).toString('hex');
-      const uncle_reward_addr = Buffer.from(`UNCLE_REWARD_${i}`).toString(
-        'hex'
-      );
-
-      sql += `
-INSERT INTO transaction (
-    transaction_hash, block_number, block_order,
-    from_address, from_nonce,
-    to_address,
-    value_wei, fee_wei,
-    gas_limit, gas_used, gas_price,
-    tx_success, is_uncle_reward
-  )
-  VALUES (
-    '\\x${uncle_reward_hash}', ${block_number}, ${UNCLE_REWARD_ORDER + i},
-    '\\x${uncle_reward_addr}', ${block_number},
-    '\\x${uncle_addr}',
-    ${uncle_reward}, 0,
-    0, 0, 0,
-    TRUE, TRUE
-  );
-`;
-
-      sql += `
-INSERT INTO address_ledger (address,transaction_hash,transaction_order,amount_wei)
-  VALUES ('\\x${uncle_addr}','\\x${uncle_reward_hash}',0,${uncle_reward});
-`;
     });
   }
-  sql += 'COMMIT;';
 
+  sql = sql.replace(/\s+/g,' ');
+  sql += '\n';
   return sql;
 }
 

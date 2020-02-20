@@ -3,6 +3,7 @@
 const async = require('async');
 const ethers = require('ethers');
 const EthUtil = require('ethereumjs-util');
+const fs = require('fs');
 const yargs = require('yargs').argv;
 const argv = yargs._;
 const timer = require('../src/tools/timer');
@@ -23,9 +24,20 @@ if (workers.isMainThread) {
   const skip_util = yargs['skip-util'] || false;
   const skip_hash = yargs['skip-hash'] || false;
 
-  const raw_data = Buffer.from(argv[0], 'hex');
+  let raw_data;
+  if (argv[0] === '-') {
+    console.log("read from stdin");
+    raw_data = fs.readFileSync('/dev/stdin');
+  } else {
+    raw_data = Buffer.from(argv[0],'hex');
+  }
 
-  const raw_rlp = rlp.decode(raw_data);
+  let raw_rlp = rlp.decode(raw_data);
+  if (raw_rlp[1][0] && raw_rlp[1][0].length === 9) {
+    console.log("whole block, pulling tx 0");
+    raw_rlp = raw_rlp[1][0];
+  }
+
   const msg_hash = _getMsgHash(raw_rlp);
   const msg_hash_str = msg_hash.toString('hex');
   const v = _getInt(raw_rlp[6]);
