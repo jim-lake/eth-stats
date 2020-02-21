@@ -8,10 +8,10 @@ const Common = require('ethereumjs-common').default;
 const mainnetGenesisState = require('ethereumjs-common/dist/genesisStates/mainnet');
 
 const GENESIS_ADDR = Buffer.from('GENESIS').toString('hex');
-const BLOCK_REWARD_ADDR = Buffer.from('BLOCK_REWARD').toString('hex');
+//const BLOCK_REWARD_ADDR = Buffer.from('BLOCK_REWARD').toString('hex');
 const CONTRACT_ADDR = Buffer.from('CONTRACT_CREATE').toString('hex');
-const BLOCK_REWARD_ORDER = 2 ** 30;
-const UNCLE_REWARD_ORDER = BLOCK_REWARD_ORDER + 1;
+//const BLOCK_REWARD_ORDER = 2 ** 30;
+//const UNCLE_REWARD_ORDER = BLOCK_REWARD_ORDER + 1;
 
 const common = new Common('mainnet');
 
@@ -62,33 +62,53 @@ INSERT INTO block (
 
   if (block_number === 0) {
     const state_keys = Object.keys(mainnetGenesisState);
+    sql += `
+INSERT INTO transaction (
+  transaction_hash, block_number, block_order,
+  from_address, from_nonce,
+  to_address,
+  value_wei, fee_wei,
+  gas_limit, gas_used, gas_price,
+  tx_success, is_genesis_tx
+)
+VALUES
+`;
     state_keys.forEach((key, i) => {
       const transaction_hash = Buffer.from(`GENESIS_${i}`).toString('hex');
       const addr = key.slice(2);
-      const value_wei = parseInt(mainnetGenesisState[key].slice(2), 16);
+      const value_wei = BigInt(mainnetGenesisState[key]);
 
+      if (i > 0) {
+        sql += ',';
+      }
       sql += `
-INSERT INTO transaction (
-    transaction_hash, block_number, block_order,
-    from_address, from_nonce,
-    to_address,
-    value_wei, fee_wei,
-    gas_limit, gas_used, gas_price,
-    tx_success, is_genesis_tx
-  )
-  VALUES (
-    '\\x${transaction_hash}', ${block_number}, ${i},
-    '\\x${GENESIS_ADDR}', ${i},
-    '\\x${addr}',
-    ${value_wei}, 0,
-    0, 0, 0,
-    TRUE, TRUE
-  );
+(
+  '\\x${transaction_hash}', ${block_number}, ${i},
+  '\\x${GENESIS_ADDR}', ${i},
+  '\\x${addr}',
+  ${value_wei}, 0,
+  0, 0, 0,
+  TRUE, TRUE
+)
 `;
     });
+    sql += ';';
   }
 
+  const contract_list = [];
   if (b.transactions.length) {
+    sql += `
+INSERT INTO transaction (
+  transaction_hash, block_number, block_order,
+  from_address, from_nonce,
+  to_address,
+  value_wei, fee_wei,
+  input_data,
+  gas_limit, gas_used, gas_price,
+  tx_success
+)
+VALUES
+`;
     b.transactions.forEach((tx, i) => {
       const is_contract_create = tx.to.length === 0;
 
@@ -108,25 +128,20 @@ INSERT INTO transaction (
       const gas_limit = _getInt(tx.gasLimit);
       const { gas_price, gas_used, fee_wei } = tx;
 
+      if (i > 0) {
+        sql += ',';
+      }
+
       sql += `
-INSERT INTO transaction (
-    transaction_hash, block_number, block_order,
-    from_address, from_nonce,
-    to_address,
-    value_wei, fee_wei,
-    input_data,
-    gas_limit, gas_used, gas_price,
-    tx_success
-  )
-  VALUES (
-    '\\x${transaction_hash}', ${block_number}, ${i},
-    '\\x${from_addr}', ${from_nonce},
-    '\\x${to_addr}',
-    ${value_wei}, ${fee_wei},
-    ${input_data},
-    ${gas_limit}, ${gas_used}, ${gas_price},
-    TRUE
-  );
+(
+  '\\x${transaction_hash}', ${block_number}, ${i},
+  '\\x${from_addr}', ${from_nonce},
+  '\\x${to_addr}',
+  ${value_wei}, ${fee_wei},
+  ${input_data},
+  ${gas_limit}, ${gas_used}, ${gas_price},
+  TRUE
+)
 `;
       if (is_contract_create) {
         const data_hash = crypto
@@ -137,22 +152,46 @@ INSERT INTO transaction (
           tx.from,
           tx.nonce
         ).toString('hex');
+        contract_list.push({
+          contract_address,
+          transaction_hash,
+          input_data,
+          data_hash,
+        });
+      }
+    });
+    sql += ';';
+  }
 
-        sql += `
+  if (contract_list.length > 0) {
+    sql += `
 INSERT INTO contract (
   contract_address, transaction_hash,
   contract_data, contract_data_hash
   )
-  VALUES (
-    '\\x${contract_address}', '\\x${transaction_hash}',
-    ${input_data}, '\\x${data_hash}'
-  );
+  VALUES
 `;
-      }
+
+    contract_list.forEach(c => {
+      sql += `(
+  '\\x${c.contract_address}', '\\x${c.transaction_hash}',
+  ${c.input_data}, '\\x${c.data_hash}'
+);
+`;
     });
+    sql += ';';
   }
 
   if (uncle_count > 0) {
+    sql += `
+INSERT INTO uncle (
+  uncle_hash,
+  block_number, block_time,
+  miner_address, block_reward_wei, parent_hash,
+  block_nonce, block_extra_data
+)
+VALUES
+`;
     b.uncleHeaders.forEach((header, i) => {
       const uncle_number = header.number.readUIntBE(0, header.number.length);
       const delta = block_number - uncle_number;
@@ -165,24 +204,25 @@ INSERT INTO contract (
       const uncle_nonce = header.nonce.toString('hex');
       const uncle_extra = header.extraData.toString('hex');
 
+      if (i > 0) {
+        sql += ',';
+      }
+
       sql += `
-INSERT INTO uncle (
-    uncle_hash,
-    block_number, block_time,
-    miner_address, block_reward_wei, parent_hash,
-    block_nonce, block_extra_data
-  )
-  VALUES (
-    '\\x${uncle_hash}',
-    ${block_number}, TO_TIMESTAMP(${uncle_time}),
-    '\\x${uncle_addr}', ${uncle_reward}, '\\x${uncle_parent}',
-    '\\x${uncle_nonce}', '\\x${uncle_extra}'
-  );
+(
+  '\\x${uncle_hash}',
+  ${block_number}, TO_TIMESTAMP(${uncle_time}),
+  '\\x${uncle_addr}', ${uncle_reward}, '\\x${uncle_parent}',
+  '\\x${uncle_nonce}', '\\x${uncle_extra}'
+);
 `;
     });
+    sql += ';';
   }
 
-  sql = sql.replace(/\s+/g,' ');
+  sql = sql.replace(/\s+/g, ' ');
+  // eslint-disable-next-line no-useless-escape
+  sql = sql.replace(/\s*([,;\(\)])\s+/g, '$1');
   sql += '\n';
   return sql;
 }
