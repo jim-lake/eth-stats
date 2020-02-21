@@ -172,11 +172,14 @@ INSERT INTO contract (
   VALUES
 `;
 
-    contract_list.forEach(c => {
+    contract_list.forEach((c, i) => {
+      if (i > 0) {
+        sql += ',';
+      }
       sql += `(
   '\\x${c.contract_address}', '\\x${c.transaction_hash}',
   ${c.input_data}, '\\x${c.data_hash}'
-);
+)
 `;
     });
     sql += ';';
