@@ -217,7 +217,7 @@ VALUES
   ${block_number}, TO_TIMESTAMP(${uncle_time}),
   '\\x${uncle_addr}', ${uncle_reward}, '\\x${uncle_parent}',
   '\\x${uncle_nonce}', '\\x${uncle_extra}'
-);
+)
 `;
     });
     sql += ';';
