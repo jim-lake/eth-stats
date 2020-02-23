@@ -8,7 +8,7 @@ const rlp = require('rlp');
 const Block = require('ethereumjs-block');
 const fs = require('fs');
 const config = require('../../config.json');
-const BlockTransform = require('../lib/block_transform');
+const BlockTransformSQL = require('../lib/block_transform_sql');
 const util = require('../tools/util');
 const timer = require('../tools/timer');
 const argv = require('yargs').argv;
@@ -61,7 +61,9 @@ if (!fd) {
   console.error('failed to open file:', input_file);
   process.exit(-1);
 }
+const t = timer.start();
 const bytes_read = fs.readSync(fd, read_buffer, 0, READ_LEN, null);
+timer.end(t, 'fs-read');
 
 let remainder;
 if (bytes_read === 0) {
@@ -152,7 +154,7 @@ async.eachLimit(
   generateRlpBlock,
   PARALLEL_LIMIT,
   (data, done) => {
-    const block_number = BlockTransform.getInt(data[0][8]);
+    const block_number = BlockTransformSQL.getInt(data[0][8]);
     const hardfork = common.activeHardfork(block_number);
     const block_common = new Common('mainnet', hardfork);
     const b = new Block(data, { common: block_common });
@@ -196,7 +198,7 @@ function _importBlock(block_number, b, done) {
 
   try {
     const t = timer.start();
-    sql = BlockTransform.getBlockSql(b);
+    sql = BlockTransformSQL.getBlockSql(b);
     timer.end(t, 'get-sql');
     async.series(
       [

@@ -75,7 +75,7 @@ ALTER TABLE public.block OWNER TO root;
 CREATE TABLE public.contract (
     contract_address bytea NOT NULL,
     transaction_hash bytea NOT NULL,
-    contract_data bytea NOT NULL,
+    contract_data bytea,
     contract_data_hash bytea NOT NULL
 );
 
@@ -174,6 +174,13 @@ CREATE INDEX address ON public.address_ledger USING btree (address);
 
 
 --
+-- Name: address_ledger_transaction_hash; Type: INDEX; Schema: public; Owner: root
+--
+
+CREATE INDEX address_ledger_transaction_hash ON public.address_ledger USING btree (transaction_hash);
+
+
+--
 -- Name: block_hash; Type: INDEX; Schema: public; Owner: root
 --
 
@@ -195,6 +202,13 @@ CREATE INDEX block_time ON public.block USING btree (block_time);
 
 
 --
+-- Name: contract_transaction_hash; Type: INDEX; Schema: public; Owner: root
+--
+
+CREATE INDEX contract_transaction_hash ON public.contract USING btree (transaction_hash);
+
+
+--
 -- Name: from_address_nonce; Type: INDEX; Schema: public; Owner: root
 --
 
@@ -206,6 +220,13 @@ CREATE UNIQUE INDEX from_address_nonce ON public.transaction USING btree (from_a
 --
 
 CREATE INDEX to_address ON public.transaction USING btree (to_address);
+
+
+--
+-- Name: uncle_block_number; Type: INDEX; Schema: public; Owner: root
+--
+
+CREATE INDEX uncle_block_number ON public.uncle USING btree (block_number);
 
 
 --
