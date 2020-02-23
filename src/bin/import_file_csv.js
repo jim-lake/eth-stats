@@ -194,6 +194,7 @@ async.eachSeries(
   },
   err => {
     console.log('');
+    console.log('read file done');
     if (err) {
       console.log('run err:', err);
     }
