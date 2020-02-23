@@ -128,7 +128,7 @@ function getBlockCsv(buffer_map, b) {
         const c_list = [
           `\\x${contract_address}`,
           `\\x${transaction_hash}`,
-          `\\x${input_data}`,
+          input_data,
           `\\x${data_hash}`,
         ];
         appendRow(buffer_map, 'contract', c_list);
