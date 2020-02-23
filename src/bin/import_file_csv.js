@@ -42,6 +42,7 @@ if (run_silent) {
 } else if (run_quiet) {
   console.log('running quiet');
 }
+console.log('csv block count:',csv_block_count);
 
 let db;
 if (fake_db_file) {
