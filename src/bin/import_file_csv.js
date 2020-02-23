@@ -37,6 +37,11 @@ if (only_block !== undefined) {
 if (skip_until) {
   console.log('skip blocks until block number:', skip_until);
 }
+if (run_silent) {
+  console.log('running silent');
+} else if (run_quiet) {
+  console.log('running quiet');
+}
 
 let db;
 if (fake_db_file) {
