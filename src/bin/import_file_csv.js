@@ -365,6 +365,8 @@ function _periodicStats(force) {
     console.log('import_count:', import_count);
     console.log('error_count:', error_count);
     console.log('write_inflight_count:', write_inflight_count);
+    console.log('write_list.length:', write_list.length);
+    console.log('import_list.length:', import_list.length);
 
     console.log('');
     console.log('blocks/second:', (block_count / delta_ms) * 1000);
