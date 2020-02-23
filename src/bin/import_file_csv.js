@@ -231,8 +231,8 @@ function _flushBuffer() {
       buffer_count = 0;
 
       write_list.push(old_buffer_map);
-      setImmediate(_writeFiles);
     }
+    setImmediate(_writeFiles);
   } catch (e) {
     console.error('_flushBuffer: threw', e);
   }
@@ -272,6 +272,8 @@ function _writeFiles() {
         write_running = false;
         setImmediate(_writeFiles);
       });
+    } else {
+      setImmediate(_importFiles);
     }
   } catch (e) {
     console.error('_writeFiles: threw', e);
