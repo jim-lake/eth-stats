@@ -17,7 +17,6 @@ const argv = require('yargs').argv;
 const BUFFER_MIN = 10000000;
 const READ_LEN = BUFFER_MIN * 2;
 const PERIODIC_PRINT = 60 * 1000;
-const CSV_BLOCK_COUNT = 100;
 const BUCKET = 'rds-load-data';
 const REGION = 'us-west-2';
 
@@ -25,6 +24,7 @@ const only_block = argv['only-block'];
 const skip_until = argv['skip-until'] || 0;
 const run_silent = argv['silent'] || false;
 const run_quiet = argv['quiet'] || run_silent;
+const csv_block_count = argv['csv-block-count'] || 1000;
 const input_file = argv._[0];
 const fake_db_file = argv['fake-db'];
 
@@ -202,7 +202,7 @@ function _importBlock(block_number, b) {
     timer.end(t, 'get-sql');
 
     buffer_count++;
-    if (buffer_count > CSV_BLOCK_COUNT) {
+    if (buffer_count > csv_block_count) {
       _flushBuffer();
     }
 
