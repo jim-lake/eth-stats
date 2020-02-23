@@ -322,7 +322,8 @@ function _checkDone() {
     buffer_count === 0 &&
     write_inflight_count === 0
   ) {
-    console.log('Everything is done');
+    console.log('');
+    console.log('everything is done');
     db.end(err => {
       if (err) {
         console.error('db end err:', err);
