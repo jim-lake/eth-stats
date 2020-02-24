@@ -269,6 +269,11 @@ function _periodicStats(force) {
 
     console.log('');
     console.log('--------');
+    if (force) {
+      console.log('argv:', process.argv.slice(2).join(' '));
+      console.log('');
+    }
+
     console.log('now_time:', new Date(now_time));
     console.log('delta_ms:', util.timeFormat(delta_ms));
     console.log('fs-read:', timer.getString('fs-read'));

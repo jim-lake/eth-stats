@@ -42,7 +42,7 @@ if (run_silent) {
 } else if (run_quiet) {
   console.log('running quiet');
 }
-console.log('csv block count:',csv_block_count);
+console.log('csv block count:', csv_block_count);
 
 let db;
 if (fake_db_file) {
@@ -351,6 +351,10 @@ function _periodicStats(force) {
 
     console.log('');
     console.log('--------');
+    if (force) {
+      console.log('argv:', process.argv.slice(2).join(' '));
+      console.log('');
+    }
     console.log('now_time:', new Date(now_time));
     console.log('delta_ms:', util.timeFormat(delta_ms));
     console.log('fs-read:', timer.getString('fs-read'));
