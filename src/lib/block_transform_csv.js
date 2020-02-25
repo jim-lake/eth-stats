@@ -15,6 +15,8 @@ exports.getBlockCsv = getBlockCsv;
 exports.getInt = _getInt;
 
 function getBlockCsv(buffer_map, b) {
+  let contract_count = 0;
+
   const block_number = _getInt(b.header.number);
   const base_reward = BigInt(
     common.paramByBlock('pow', 'minerReward', block_number)
@@ -132,6 +134,8 @@ function getBlockCsv(buffer_map, b) {
           `\\x${data_hash}`,
         ];
         appendRow(buffer_map, 'contract', c_list);
+
+        contract_count++;
       }
     });
   }
@@ -162,6 +166,11 @@ function getBlockCsv(buffer_map, b) {
       appendRow(buffer_map, 'uncle', uncle_list);
     });
   }
+  return {
+    uncle_count,
+    transaction_count: b.transactions.length,
+    contract_count,
+  };
 }
 
 function _calcGasUsed(tx, block_number) {

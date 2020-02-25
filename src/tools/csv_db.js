@@ -52,7 +52,7 @@ function s3WriteBufferMap(params, done) {
         .update(csv_string)
         .digest('hex');
 
-      const key = `${prefix}${date}/${table_name}/${time}_${hash}.csv`;
+      const key = `${prefix}${date}/${time}/${table_name}_${hash}.csv`;
       const opts = {
         bucket,
         key,

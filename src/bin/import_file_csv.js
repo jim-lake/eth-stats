@@ -19,6 +19,8 @@ const READ_LEN = BUFFER_MIN * 2;
 const PERIODIC_PRINT = 60 * 1000;
 const BUCKET = 'rds-load-data';
 const REGION = 'us-west-2';
+const PREFIX = `eth_${new Date().toISOString().replace(/[:-T]|\.\d\d\d/g,'')}`;
+console.log("s3 prefix:",PREFIX);
 
 const only_block = argv['only-block'];
 const skip_until = argv['skip-until'] || 0;
@@ -71,6 +73,18 @@ let write_inflight_count = 0;
 
 const import_list = [];
 let import_running = false;
+
+let min_block = 2 ** 32;
+let max_block = 0;
+let block_count = 0;
+let tx_count = 0;
+let contract_count = 0;
+let skip_count = 0;
+let flush_count = 0;
+let error_count = 0;
+let import_count = 0;
+let csv_bytes = 0;
+let uncle_count = 0;
 
 const read_buffer = Buffer.allocUnsafe(READ_LEN);
 const fd = fs.openSync(input_file, 'r');
@@ -156,15 +170,8 @@ const generateRlpBlock = {
     }),
 };
 
-let min_block = 2 ** 32;
-let max_block = 0;
 const start_time = Date.now();
 console.log('start_time:', new Date(start_time));
-let block_count = 0;
-let skip_count = 0;
-let flush_count = 0;
-let error_count = 0;
-let import_count = 0;
 
 async.eachSeries(
   generateRlpBlock,
@@ -205,8 +212,12 @@ async.eachSeries(
 function _importBlock(block_number, b) {
   try {
     const t = timer.start();
-    BlockTransformCSV.getBlockCsv(buffer_map, b);
+    const stats = BlockTransformCSV.getBlockCsv(buffer_map, b);
     timer.end(t, 'get-sql');
+
+    tx_count += stats.transaction_count;
+    contract_count += stats.contract_count;
+    uncle_count += stats.uncle_count;
 
     buffer_count++;
     if (buffer_count > csv_block_count) {
@@ -244,10 +255,15 @@ function _writeFiles() {
       const buffer_map = write_list.shift();
       write_inflight_count++;
 
+      for (let key in buffer_map) {
+        const s = buffer_map[key];
+        csv_bytes += s.length;
+      }
+
       const opts = {
         bufferMap: buffer_map,
         bucket: BUCKET,
-        prefix: 'eth',
+        prefix: PREFIX,
       };
       const t = timer.start();
       csvDB.s3WriteBufferMap(opts, (err, file_map) => {
@@ -369,6 +385,9 @@ function _periodicStats(force) {
     console.log('max_block:', max_block);
     console.log('');
     console.log('block_count:', block_count);
+    console.log('tx_count:', tx_count);
+    console.log('contract_count:', contract_count);
+    console.log('uncle_count:', uncle_count);
     console.log('skip_count:', skip_count);
     console.log('flush_count:', flush_count);
     console.log('import_count:', import_count);
@@ -376,9 +395,11 @@ function _periodicStats(force) {
     console.log('write_inflight_count:', write_inflight_count);
     console.log('write_list.length:', write_list.length);
     console.log('import_list.length:', import_list.length);
+    console.log('csv_bytes:', csv_bytes);
 
     console.log('');
     console.log('blocks/second:', (block_count / delta_ms) * 1000);
+    console.log('csv_bytes/second:', (csv_bytes / delta_ms) * 1000);
     console.log('--------');
     console.log('');
   }
