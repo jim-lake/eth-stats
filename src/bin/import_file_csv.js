@@ -19,8 +19,8 @@ const READ_LEN = BUFFER_MIN * 2;
 const PERIODIC_PRINT = 60 * 1000;
 const BUCKET = 'rds-load-data';
 const REGION = 'us-west-2';
-const PREFIX = `eth_${new Date().toISOString().replace(/[:-T]|\.\d\d\d/g,'')}`;
-console.log("s3 prefix:",PREFIX);
+const PREFIX = `eth_${new Date().toISOString().replace(/[:\-Z]|(\.\d+)/g, '')}`;
+console.log('s3 prefix:', PREFIX);
 
 const only_block = argv['only-block'];
 const skip_until = argv['skip-until'] || 0;
