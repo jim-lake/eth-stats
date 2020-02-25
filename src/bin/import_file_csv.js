@@ -395,11 +395,14 @@ function _periodicStats(force) {
     console.log('write_inflight_count:', write_inflight_count);
     console.log('write_list.length:', write_list.length);
     console.log('import_list.length:', import_list.length);
-    console.log('csv_bytes:', csv_bytes);
+    console.log('csv_bytes:', util.byteFormat(csv_bytes));
 
     console.log('');
     console.log('blocks/second:', (block_count / delta_ms) * 1000);
-    console.log('csv_bytes/second:', (csv_bytes / delta_ms) * 1000);
+    console.log(
+      'csv_bytes/second:',
+      util.byteFormat((csv_bytes / delta_ms) * 1000) + '/s'
+    );
     console.log('--------');
     console.log('');
   }

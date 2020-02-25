@@ -47,6 +47,7 @@ exports.getTime = getTime;
 exports.setSyncTimeout = setSyncTimeout;
 exports.pad = pad;
 exports.timeFormat = timeFormat;
+exports.byteFormat = byteFormat;
 
 let g_remoteLogFunc = null;
 function setRemoteLog(func) {
@@ -460,4 +461,21 @@ function timeFormat(time) {
   }
 
   return ret;
+}
+
+function byteFormat(bytes) {
+  const POSTFIXES = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+
+  let rank = 0;
+  let ret = bytes;
+  while (ret > 1024) {
+    ret /= 1024;
+    rank++;
+  }
+  if (rank > 0) {
+    ret = ret.toFixed(3);
+  } else {
+    ret = String(ret);
+  }
+  return ret + POSTFIXES[rank];
 }
