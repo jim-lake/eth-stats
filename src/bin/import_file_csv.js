@@ -403,6 +403,7 @@ function _periodicStats(force) {
       'csv_bytes/second:',
       util.byteFormat((csv_bytes / delta_ms) * 1000) + '/s'
     );
+    console.log('tx/block:', tx_count / block_count);
     console.log('--------');
     console.log('');
   }
