@@ -8,6 +8,7 @@ const db = require('./pg_db');
 const util = require('./util');
 
 exports.appendRow = appendRow;
+exports.getSize = getSize;
 exports.s3WriteBufferMap = s3WriteBufferMap;
 exports.importFile = importFile;
 
@@ -34,12 +35,20 @@ function appendRow(buffer_map, table_name, value_list) {
   }
 }
 
+function getSize(buffer_map) {
+  let size = 0;
+  for (let key in buffer_map) {
+    size += buffer_map[key].length;
+  }
+  return size;
+}
+
 function s3WriteBufferMap(params, done) {
   const { bufferMap, bucket } = params;
   const prefix = params.prefix + '/' || '';
   const table_name_list = Object.keys(bufferMap);
 
-  const table_key_map = {};
+  const write_list = [];
   async.each(
     table_name_list,
     (table_name, done) => {
@@ -52,7 +61,7 @@ function s3WriteBufferMap(params, done) {
         .update(csv_string)
         .digest('hex');
 
-      const key = `${prefix}${date}/${time}/${table_name}_${hash}.csv`;
+      const key = `${prefix}${table_name}/${date}/${time}/${hash}.csv`;
       const opts = {
         bucket,
         key,
@@ -64,13 +73,16 @@ function s3WriteBufferMap(params, done) {
         if (err) {
           util.errorLog('csv_db.s3WriteBuffer: s3 error:', err);
         } else {
-          table_key_map[table_name] = key;
+          write_list.push({
+            table_name,
+            key,
+          });
         }
         done(err);
       });
     },
     err => {
-      done(err, table_key_map);
+      done(err, write_list);
     }
   );
 }

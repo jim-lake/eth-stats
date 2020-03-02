@@ -17,6 +17,7 @@ exports.query = query;
 exports.commit = commit;
 exports.rollback = rollback;
 exports.buildQuery = buildQuery;
+exports.buildListInsert = buildListInsert;
 
 function init(params) {
   const opts = Object.assign(
@@ -177,6 +178,29 @@ function buildQuery(input_sql, object) {
 
   const insert_sql = `(${keys.join(',')}) VALUES (${numbers.join(',')})`;
   const sql = input_sql.replace('?', insert_sql);
+  return {
+    sql,
+    values,
+  };
+}
+
+function buildListInsert(input_sql, list) {
+  let sql = input_sql;
+  const values = [];
+  sql += list
+    .map(sub_list => {
+      return (
+        '(' +
+        sub_list
+          .map(item => {
+            values.push(item);
+            return '$' + String(values.length);
+          })
+          .join(',') +
+        ')'
+      );
+    })
+    .join(',');
   return {
     sql,
     values,

@@ -12,6 +12,7 @@ const EMAIL_REGEX = new RegExp(
   'i'
 );
 
+exports.noop = noop;
 exports.setRemoteLog = setRemoteLog;
 exports.inspect = inspect;
 exports.errorLog = errorLog;
@@ -48,6 +49,8 @@ exports.setSyncTimeout = setSyncTimeout;
 exports.pad = pad;
 exports.timeFormat = timeFormat;
 exports.byteFormat = byteFormat;
+
+function noop() {}
 
 let g_remoteLogFunc = null;
 function setRemoteLog(func) {
@@ -271,7 +274,7 @@ function herdWrapper(key, func) {
       func((...args) => {
         const done_list = g_done_list_map[key];
         g_done_list_map[key] = false;
-        async.eachSeries(done_list, d => d(...args));
+        done_list.forEach(done => done(...args));
       });
     }
   };
