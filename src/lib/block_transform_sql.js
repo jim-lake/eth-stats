@@ -19,7 +19,8 @@ exports.getBlockSql = getBlockSql;
 exports.getInt = _getInt;
 
 function getBlockSql(b) {
-  let sql = '';
+  let sql = 'BEGIN;';
+  sql += 'SET CONSTRAINTS ALL DEFERRED;';
 
   const block_number = _getInt(b.header.number);
   const base_reward = new BN(
@@ -222,6 +223,7 @@ VALUES
     });
     sql += ';';
   }
+  sql += 'COMMIT;';
 
   sql = sql.replace(/\s+/g, ' ');
   // eslint-disable-next-line no-useless-escape
