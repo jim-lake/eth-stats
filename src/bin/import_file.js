@@ -13,7 +13,7 @@ const util = require('../tools/util');
 const timer = require('../tools/timer');
 const argv = require('yargs').argv;
 
-const PARALLEL_LIMIT = 10;
+const PARALLEL_LIMIT = 100;
 const BUFFER_MIN = 10000000;
 const READ_LEN = BUFFER_MIN * 2;
 const PERIODIC_PRINT = 60 * 1000;
