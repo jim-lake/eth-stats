@@ -48,6 +48,7 @@ if (fake_db_file) {
     {
       idleTimeoutMillis: 120000,
       connectionTimeoutMillis: 30000,
+      max: PARALLEL_LIMIT + 10,
     },
     config.db
   );
