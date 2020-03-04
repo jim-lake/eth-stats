@@ -67,7 +67,7 @@ function s3WriteBufferMap(params, done) {
         key,
         body: csv_string,
         contentType: 'text/csv',
-        gzip: true,
+        //gzip: true,
       };
       aws.s3write(opts, err => {
         if (err) {
