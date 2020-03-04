@@ -67,7 +67,9 @@ INSERT INTO block (
     const state_keys = Object.keys(mainnetGenesisState);
     sql += `
 INSERT INTO transaction (
-  transaction_hash, block_number, block_order,
+  transaction_hash,
+  transaction_hash_prefix,
+  block_number, block_order,
   from_address, from_nonce,
   to_address,
   value_wei, fee_wei,
@@ -78,6 +80,7 @@ VALUES
 `;
     state_keys.forEach((key, i) => {
       const transaction_hash = Buffer.from(`GENESIS_${i}`).toString('hex');
+      const transaction_hash_prefix = transaction_hash.slice(0, 14);
       const addr = key.slice(2);
       const value_wei = BigInt(mainnetGenesisState[key]);
 
@@ -86,7 +89,8 @@ VALUES
       }
       sql += `
 (
-  '\\x${transaction_hash}', ${block_number}, ${i},
+  '\\x${transaction_hash}', '\\x${transaction_hash_prefix}',
+  ${block_number}, ${i},
   '\\x${GENESIS_ADDR}', ${i},
   '\\x${addr}',
   ${value_wei}, 0,
@@ -102,7 +106,9 @@ VALUES
   if (b.transactions.length) {
     sql += `
 INSERT INTO transaction (
-  transaction_hash, block_number, block_order,
+  transaction_hash,
+  transaction_hash_prefix,
+  block_number, block_order,
   from_address, from_nonce,
   to_address,
   value_wei, fee_wei,
@@ -116,6 +122,7 @@ VALUES
       const is_contract_create = tx.to.length === 0;
 
       const transaction_hash = tx.hash().toString('hex');
+      const transaction_hash_prefix = transaction_hash.slice(0, 14);
 
       const t = timer.start();
       const from_addr = tx.from.toString('hex');
@@ -137,7 +144,8 @@ VALUES
 
       sql += `
 (
-  '\\x${transaction_hash}', ${block_number}, ${i},
+  '\\x${transaction_hash}', '\\x${transaction_hash_prefix}',
+  ${block_number}, ${i},
   '\\x${from_addr}', ${from_nonce},
   '\\x${to_addr}',
   ${value_wei}, ${fee_wei},
@@ -157,7 +165,8 @@ VALUES
         ).toString('hex');
         contract_list.push({
           contract_address,
-          transaction_hash,
+          block_number,
+          block_order: i,
           input_data,
           data_hash,
         });
@@ -169,7 +178,8 @@ VALUES
   if (contract_list.length > 0) {
     sql += `
 INSERT INTO contract (
-  contract_address, transaction_hash,
+  contract_address,
+  block_number, block_order,
   contract_data, contract_data_hash
   )
   VALUES
@@ -180,7 +190,8 @@ INSERT INTO contract (
         sql += ',';
       }
       sql += `(
-  '\\x${c.contract_address}', '\\x${c.transaction_hash}',
+  '\\x${c.contract_address}',
+  ${c.block_number}, ${c.block_order},
   ${c.input_data}, '\\x${c.data_hash}'
 )
 `;
@@ -192,7 +203,8 @@ INSERT INTO contract (
     sql += `
 INSERT INTO uncle (
   uncle_hash,
-  block_number, block_time,
+  block_number, uncle_order,
+  block_time,
   miner_address, block_reward_wei, parent_hash,
   block_nonce, block_extra_data
 )
@@ -217,7 +229,8 @@ VALUES
       sql += `
 (
   '\\x${uncle_hash}',
-  ${block_number}, TO_TIMESTAMP(${uncle_time}),
+  ${block_number}, ${i},
+  TO_TIMESTAMP(${uncle_time}),
   '\\x${uncle_addr}', ${uncle_reward}, '\\x${uncle_parent}',
   '\\x${uncle_nonce}', '\\x${uncle_extra}'
 )

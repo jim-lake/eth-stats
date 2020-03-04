@@ -17,7 +17,7 @@ const BUFFER_MIN = 10000000;
 const READ_LEN = BUFFER_MIN * 2;
 const PERIODIC_PRINT = 60 * 1000;
 
-const parallel_limit = argv['parallel-limit'] || 100;
+const parallel_limit = argv['parallel-limit'] || 10;
 const delete_blocks = argv['delete-blocks'] || false;
 const only_block = argv['only-block'];
 const skip_until = argv['skip-until'] || 0;

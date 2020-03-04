@@ -42,8 +42,8 @@ SET default_with_oids = false;
 
 CREATE TABLE public.address_ledger (
     address bytea NOT NULL,
-    transaction_hash bytea NOT NULL,
-    transaction_order integer NOT NULL,
+    block_number integer NOT NULL,
+    block_order integer NOT NULL,
     amount_wei numeric(80,0) NOT NULL
 );
 
@@ -74,13 +74,53 @@ ALTER TABLE public.block OWNER TO root;
 
 CREATE TABLE public.contract (
     contract_address bytea NOT NULL,
-    transaction_hash bytea NOT NULL,
+    block_number integer NOT NULL,
+    block_order integer NOT NULL,
     contract_data bytea,
     contract_data_hash bytea NOT NULL
-);
+)
+WITH (autovacuum_enabled='false');
 
 
 ALTER TABLE public.contract OWNER TO root;
+
+--
+-- Name: etl_file; Type: TABLE; Schema: public; Owner: root
+--
+
+CREATE TABLE public.etl_file (
+    etl_file_id bigint NOT NULL,
+    create_time timestamp without time zone DEFAULT now(),
+    table_name character varying(64) NOT NULL,
+    start_block_number integer NOT NULL,
+    end_block_number integer NOT NULL,
+    s3_url character varying(1024) NOT NULL,
+    is_imported boolean DEFAULT false NOT NULL
+);
+
+
+ALTER TABLE public.etl_file OWNER TO root;
+
+--
+-- Name: etl_file_etl_file_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+--
+
+CREATE SEQUENCE public.etl_file_etl_file_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.etl_file_etl_file_id_seq OWNER TO root;
+
+--
+-- Name: etl_file_etl_file_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+--
+
+ALTER SEQUENCE public.etl_file_etl_file_id_seq OWNED BY public.etl_file.etl_file_id;
+
 
 --
 -- Name: transaction; Type: TABLE; Schema: public; Owner: root
@@ -88,6 +128,7 @@ ALTER TABLE public.contract OWNER TO root;
 
 CREATE TABLE public.transaction (
     transaction_hash bytea NOT NULL,
+    transaction_hash_prefix bytea NOT NULL,
     block_number integer NOT NULL,
     block_order integer NOT NULL,
     from_address bytea NOT NULL,
@@ -103,7 +144,8 @@ CREATE TABLE public.transaction (
     is_genesis_tx boolean DEFAULT false NOT NULL,
     is_block_reward boolean DEFAULT false NOT NULL,
     is_uncle_reward boolean DEFAULT false NOT NULL
-);
+)
+WITH (autovacuum_enabled='false');
 
 
 ALTER TABLE public.transaction OWNER TO root;
@@ -115,6 +157,7 @@ ALTER TABLE public.transaction OWNER TO root;
 CREATE TABLE public.uncle (
     uncle_hash bytea NOT NULL,
     block_number integer NOT NULL,
+    uncle_order integer NOT NULL,
     block_time timestamp without time zone NOT NULL,
     miner_address bytea NOT NULL,
     block_reward_wei numeric(80,0) NOT NULL,
@@ -127,11 +170,10 @@ CREATE TABLE public.uncle (
 ALTER TABLE public.uncle OWNER TO root;
 
 --
--- Name: address_ledger address_ledger_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: etl_file etl_file_id; Type: DEFAULT; Schema: public; Owner: root
 --
 
-ALTER TABLE ONLY public.address_ledger
-    ADD CONSTRAINT address_ledger_pkey PRIMARY KEY (transaction_hash, transaction_order);
+ALTER TABLE ONLY public.etl_file ALTER COLUMN etl_file_id SET DEFAULT nextval('public.etl_file_etl_file_id_seq'::regclass);
 
 
 --
@@ -143,11 +185,11 @@ ALTER TABLE ONLY public.block
 
 
 --
--- Name: contract contract_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: etl_file etl_file_pkey; Type: CONSTRAINT; Schema: public; Owner: root
 --
 
-ALTER TABLE ONLY public.contract
-    ADD CONSTRAINT contract_pkey PRIMARY KEY (contract_address);
+ALTER TABLE ONLY public.etl_file
+    ADD CONSTRAINT etl_file_pkey PRIMARY KEY (etl_file_id);
 
 
 --
@@ -155,7 +197,7 @@ ALTER TABLE ONLY public.contract
 --
 
 ALTER TABLE ONLY public.transaction
-    ADD CONSTRAINT transaction_pkey PRIMARY KEY (transaction_hash);
+    ADD CONSTRAINT transaction_pkey PRIMARY KEY (block_number, block_order);
 
 
 --
@@ -163,102 +205,35 @@ ALTER TABLE ONLY public.transaction
 --
 
 ALTER TABLE ONLY public.uncle
-    ADD CONSTRAINT uncle_pkey PRIMARY KEY (uncle_hash);
+    ADD CONSTRAINT uncle_pkey PRIMARY KEY (block_number,uncle_order);
 
 
 --
--- Name: address; Type: INDEX; Schema: public; Owner: root
+-- Name: address_hash; Type: INDEX; Schema: public; Owner: root
 --
 
-CREATE INDEX address ON public.address_ledger USING btree (address);
-
-
---
--- Name: address_ledger_transaction_hash; Type: INDEX; Schema: public; Owner: root
---
-
-CREATE INDEX address_ledger_transaction_hash ON public.address_ledger USING btree (transaction_hash);
+CREATE INDEX address_hash ON public.address_ledger USING hash (address);
 
 
 --
--- Name: block_hash; Type: INDEX; Schema: public; Owner: root
+-- Name: address_ledger_block_number_order; Type: INDEX; Schema: public; Owner: root
 --
 
-CREATE UNIQUE INDEX block_hash ON public.block USING btree (block_hash);
-
-
---
--- Name: block_number_order; Type: INDEX; Schema: public; Owner: root
---
-
-CREATE UNIQUE INDEX block_number_order ON public.transaction USING btree (block_number, block_order);
+CREATE INDEX address_ledger_block_number_order ON public.address_ledger USING btree (block_number, block_order);
 
 
 --
--- Name: block_time; Type: INDEX; Schema: public; Owner: root
+-- Name: contract_address; Type: INDEX; Schema: public; Owner: root
 --
 
-CREATE INDEX block_time ON public.block USING btree (block_time);
-
-
---
--- Name: contract_transaction_hash; Type: INDEX; Schema: public; Owner: root
---
-
-CREATE INDEX contract_transaction_hash ON public.contract USING btree (transaction_hash);
+CREATE INDEX contract_address ON public.contract USING hash (contract_address);
 
 
 --
--- Name: from_address_nonce; Type: INDEX; Schema: public; Owner: root
+-- Name: transaction_hash_prefix; Type: INDEX; Schema: public; Owner: root
 --
 
-CREATE UNIQUE INDEX from_address_nonce ON public.transaction USING btree (from_address, from_nonce);
-
-
---
--- Name: to_address; Type: INDEX; Schema: public; Owner: root
---
-
-CREATE INDEX to_address ON public.transaction USING btree (to_address);
-
-
---
--- Name: uncle_block_number; Type: INDEX; Schema: public; Owner: root
---
-
-CREATE INDEX uncle_block_number ON public.uncle USING btree (block_number);
-
-
---
--- Name: address_ledger address_ledger_transaction_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: root
---
-
-ALTER TABLE ONLY public.address_ledger
-    ADD CONSTRAINT address_ledger_transaction_hash_fkey FOREIGN KEY (transaction_hash) REFERENCES public.transaction(transaction_hash) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
---
--- Name: contract contract_transaction_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: root
---
-
-ALTER TABLE ONLY public.contract
-    ADD CONSTRAINT contract_transaction_hash_fkey FOREIGN KEY (transaction_hash) REFERENCES public.transaction(transaction_hash) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
---
--- Name: transaction transaction_block_number_fkey; Type: FK CONSTRAINT; Schema: public; Owner: root
---
-
-ALTER TABLE ONLY public.transaction
-    ADD CONSTRAINT transaction_block_number_fkey FOREIGN KEY (block_number) REFERENCES public.block(block_number) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
---
--- Name: uncle uncle_block_number_fkey; Type: FK CONSTRAINT; Schema: public; Owner: root
---
-
-ALTER TABLE ONLY public.uncle
-    ADD CONSTRAINT uncle_block_number_fkey FOREIGN KEY (block_number) REFERENCES public.block(block_number) ON UPDATE CASCADE ON DELETE CASCADE;
+CREATE INDEX transaction_hash_prefix ON public.transaction USING hash (transaction_hash_prefix);
 
 
 --
