@@ -13,11 +13,11 @@ const util = require('../tools/util');
 const timer = require('../tools/timer');
 const argv = require('yargs').argv;
 
-const PARALLEL_LIMIT = 100;
 const BUFFER_MIN = 10000000;
 const READ_LEN = BUFFER_MIN * 2;
 const PERIODIC_PRINT = 60 * 1000;
 
+const parallel_limit = argv['parallel-limit'] || 100;
 const delete_blocks = argv['delete-blocks'] || false;
 const only_block = argv['only-block'];
 const skip_until = argv['skip-until'] || 0;
@@ -48,12 +48,16 @@ if (fake_db_file) {
     {
       idleTimeoutMillis: 120000,
       connectionTimeoutMillis: 30000,
-      max: PARALLEL_LIMIT + 10,
+      max: parallel_limit + 10,
     },
     config.db
   );
   db.init(db_opts);
+  db.pool.on('connect', client => {
+    client.query('SET synchronous_commit TO OFF');
+  });
 }
+console.log('parallel limit:', parallel_limit);
 console.log('');
 
 const read_buffer = Buffer.allocUnsafe(READ_LEN);
@@ -153,7 +157,7 @@ let error_count = 0;
 
 async.eachLimit(
   generateRlpBlock,
-  PARALLEL_LIMIT,
+  parallel_limit,
   (data, done) => {
     const block_number = BlockTransformSQL.getInt(data[0][8]);
     const hardfork = common.activeHardfork(block_number);
@@ -284,8 +288,8 @@ function _periodicStats(force) {
     console.log('tx-from:', timer.getString('tx-from'));
     console.log('raw db-insert:', timer.getString('db-insert'));
     console.log(
-      `db-insert/${PARALLEL_LIMIT}:`,
-      timer.getString('db-insert', PARALLEL_LIMIT)
+      `db-insert/${parallel_limit}:`,
+      timer.getString('db-insert', parallel_limit)
     );
     console.log('');
     console.log('min_block:', min_block);

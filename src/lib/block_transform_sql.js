@@ -21,6 +21,7 @@ exports.getInt = _getInt;
 function getBlockSql(b) {
   let sql = '';
   sql += 'BEGIN;';
+  //sql += 'SET synchronous_commit TO OFF;';
   //sql += 'SET CONSTRAINTS ALL DEFERRED;';
 
   const block_number = _getInt(b.header.number);
