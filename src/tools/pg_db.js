@@ -30,6 +30,7 @@ function init(params) {
   pg.defaults.parseInt8 = true;
   db_pool = new pg.Pool(opts);
   db_pool.on('error', _onPoolError);
+  exports.pool = db_pool;
 }
 function end(done) {
   if (db_pool) {
