@@ -34,6 +34,7 @@ const run_quiet = argv['quiet'] || run_silent;
 const csv_max_buffer = argv['csv-max-buffer'] || DEFAULT_MAX_BUFFER;
 const input_file = argv._[0];
 const fake_db_file = argv['fake-db'];
+const is_redshift = argv['redshift'];
 
 const common = new Common('mainnet');
 
@@ -50,6 +51,10 @@ if (run_silent) {
   console.log('running quiet');
 }
 console.log('csv max buffer:', csv_max_buffer);
+if (is_redshift) {
+  csvDB.setDBType('redshift');
+  console.log('redshift: true');
+}
 
 let db;
 if (fake_db_file) {
@@ -343,36 +348,40 @@ const _writeFile = util.herdWrapper('write-file', done => {
             });
           },
           done => {
-            const source_sql = `
-INSERT INTO etl_file (table_name,start_block_number,end_block_number, s3_url) VALUES
-`;
-            const list = table_list.map(entry => {
-              const s3_url = `s3://${BUCKET}/${entry.key}`;
-              return [
-                entry.table_name,
-                start_block_number,
-                end_block_number,
-                s3_url,
-              ];
-            });
-            const { sql, values } = db.buildListInsert(source_sql, list);
-            db.queryFromPool(sql, values, err => {
-              if (err) {
-                console.error('_flushBuffer: sql err:', err);
-                console.error('_flushBuffer: sql:', sql);
-                console.error('_flushBuffer: list:', values);
-              } else {
-                _maybeLog(
-                  '_writeFile: wrote:',
+            if (is_redshift) {
+              done();
+            } else {
+              const source_sql = `
+  INSERT INTO etl_file (table_name,start_block_number,end_block_number, s3_url) VALUES
+  `;
+              const list = table_list.map(entry => {
+                const s3_url = `s3://${BUCKET}/${entry.key}`;
+                return [
+                  entry.table_name,
                   start_block_number,
                   end_block_number,
-                  'remaining writes:',
-                  write_list.length
-                );
-                _maybeLogDot('+');
-              }
-              done(err);
-            });
+                  s3_url,
+                ];
+              });
+              const { sql, values } = db.buildListInsert(source_sql, list);
+              db.queryFromPool(sql, values, err => {
+                if (err) {
+                  console.error('_flushBuffer: sql err:', err);
+                  console.error('_flushBuffer: sql:', sql);
+                  console.error('_flushBuffer: list:', values);
+                } else {
+                  _maybeLog(
+                    '_writeFile: wrote:',
+                    start_block_number,
+                    end_block_number,
+                    'remaining writes:',
+                    write_list.length
+                  );
+                  _maybeLogDot('+');
+                }
+                done(err);
+              });
+            }
           },
         ],
         err => {

@@ -7,10 +7,19 @@ const aws = require('./aws');
 const db = require('./pg_db');
 const util = require('./util');
 
+exports.setDBType = setDBType;
 exports.appendRow = appendRow;
 exports.getSize = getSize;
 exports.s3WriteBufferMap = s3WriteBufferMap;
 exports.importFile = importFile;
+exports.escapeBinary = escapeBinary;
+exports.formatDate = formatDate;
+
+let g_dbType = 'postgresql';
+
+function setDBType(type) {
+  g_dbType = type;
+}
 
 function appendRow(buffer_map, table_name, value_list) {
   let new_line = '';
@@ -97,4 +106,35 @@ function importFile(params, done) {
     }
     done(err);
   });
+}
+
+function escapeBinary(val) {
+  let ret;
+  if (g_dbType === 'redshift') {
+    ret = val.toString('hex');
+  } else {
+    ret = `\\x${val.toString('hex')}`;
+  }
+  return ret;
+}
+function formatDate(d) {
+  let ret;
+  if (g_dbType === 'redshift') {
+    ret = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(
+      d.getUTCDate()
+    )} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(
+      d.getUTCSeconds()
+    )}.${pad(d.getUTCMilliseconds(), 3)}`;
+  } else {
+    ret = d.toISOString();
+  }
+  return ret;
+}
+
+function pad(i, n) {
+  if (n === 3) {
+    return i < 10 ? '00' + i : i < 100 ? '0' + i : i;
+  } else {
+    return i < 10 ? '0' + i : i;
+  }
 }

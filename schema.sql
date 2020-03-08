@@ -43,7 +43,7 @@ SET default_with_oids = false;
 CREATE TABLE public.address_ledger (
     address bytea NOT NULL,
     block_number integer NOT NULL,
-    block_order integer NOT NULL,
+    block_index integer NOT NULL,
     amount_wei numeric(80,0) NOT NULL
 );
 
@@ -75,7 +75,7 @@ ALTER TABLE public.block OWNER TO root;
 CREATE TABLE public.contract (
     contract_address bytea NOT NULL,
     block_number integer NOT NULL,
-    block_order integer NOT NULL,
+    block_index integer NOT NULL,
     contract_data bytea,
     contract_data_hash bytea NOT NULL
 )
@@ -130,7 +130,7 @@ CREATE TABLE public.transaction (
     transaction_hash bytea NOT NULL,
     transaction_hash_prefix bytea NOT NULL,
     block_number integer NOT NULL,
-    block_order integer NOT NULL,
+    block_index integer NOT NULL,
     from_address bytea NOT NULL,
     from_nonce integer NOT NULL,
     to_address bytea NOT NULL,
@@ -157,7 +157,7 @@ ALTER TABLE public.transaction OWNER TO root;
 CREATE TABLE public.uncle (
     uncle_hash bytea NOT NULL,
     block_number integer NOT NULL,
-    uncle_order integer NOT NULL,
+    uncle_index integer NOT NULL,
     block_time timestamp without time zone NOT NULL,
     miner_address bytea NOT NULL,
     block_reward_wei numeric(80,0) NOT NULL,
@@ -197,7 +197,7 @@ ALTER TABLE ONLY public.etl_file
 --
 
 ALTER TABLE ONLY public.transaction
-    ADD CONSTRAINT transaction_pkey PRIMARY KEY (block_number, block_order);
+    ADD CONSTRAINT transaction_pkey PRIMARY KEY (block_number, block_index);
 
 
 --
@@ -205,7 +205,7 @@ ALTER TABLE ONLY public.transaction
 --
 
 ALTER TABLE ONLY public.uncle
-    ADD CONSTRAINT uncle_pkey PRIMARY KEY (block_number,uncle_order);
+    ADD CONSTRAINT uncle_pkey PRIMARY KEY (block_number, uncle_index);
 
 
 --
@@ -219,7 +219,7 @@ CREATE INDEX address_hash ON public.address_ledger USING hash (address);
 -- Name: address_ledger_block_number_order; Type: INDEX; Schema: public; Owner: root
 --
 
-CREATE INDEX address_ledger_block_number_order ON public.address_ledger USING btree (block_number, block_order);
+CREATE INDEX address_ledger_block_number_index ON public.address_ledger USING btree (block_number, block_index);
 
 
 --
@@ -230,10 +230,10 @@ CREATE INDEX contract_address ON public.contract USING hash (contract_address);
 
 
 --
--- Name: transaction_hash_prefix; Type: INDEX; Schema: public; Owner: root
+-- Name: contract_block_number_index; Type: INDEX; Schema: public; Owner: root
 --
 
-CREATE INDEX transaction_hash_prefix ON public.transaction USING hash (transaction_hash_prefix);
+CREATE INDEX contract_block_number_index ON public.contract USING btree (block_number, block_index);
 
 
 --
