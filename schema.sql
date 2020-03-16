@@ -216,7 +216,7 @@ CREATE INDEX address_hash ON public.address_ledger USING hash (address);
 
 
 --
--- Name: address_ledger_block_number_order; Type: INDEX; Schema: public; Owner: root
+-- Name: address_ledger_block_number_index; Type: INDEX; Schema: public; Owner: root
 --
 
 CREATE INDEX address_ledger_block_number_index ON public.address_ledger USING btree (block_number, block_index);
