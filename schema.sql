@@ -17,16 +17,14 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: public; Type: SCHEMA; Schema: -; Owner: root
+-- Name: public; Type: SCHEMA; Schema: -; Owner: -
 --
 
 CREATE SCHEMA public;
 
 
-ALTER SCHEMA public OWNER TO root;
-
 --
--- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: root
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON SCHEMA public IS 'standard public schema';
@@ -37,7 +35,7 @@ SET default_tablespace = '';
 SET default_with_oids = false;
 
 --
--- Name: address_ledger; Type: TABLE; Schema: public; Owner: root
+-- Name: address_ledger; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.address_ledger (
@@ -48,10 +46,8 @@ CREATE TABLE public.address_ledger (
 );
 
 
-ALTER TABLE public.address_ledger OWNER TO root;
-
 --
--- Name: block; Type: TABLE; Schema: public; Owner: root
+-- Name: block; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.block (
@@ -66,10 +62,8 @@ CREATE TABLE public.block (
 );
 
 
-ALTER TABLE public.block OWNER TO root;
-
 --
--- Name: contract; Type: TABLE; Schema: public; Owner: root
+-- Name: contract; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.contract (
@@ -82,10 +76,8 @@ CREATE TABLE public.contract (
 WITH (autovacuum_enabled='false');
 
 
-ALTER TABLE public.contract OWNER TO root;
-
 --
--- Name: etl_file; Type: TABLE; Schema: public; Owner: root
+-- Name: etl_file; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.etl_file (
@@ -99,10 +91,8 @@ CREATE TABLE public.etl_file (
 );
 
 
-ALTER TABLE public.etl_file OWNER TO root;
-
 --
--- Name: etl_file_etl_file_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: etl_file_etl_file_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.etl_file_etl_file_id_seq
@@ -113,17 +103,15 @@ CREATE SEQUENCE public.etl_file_etl_file_id_seq
     CACHE 1;
 
 
-ALTER TABLE public.etl_file_etl_file_id_seq OWNER TO root;
-
 --
--- Name: etl_file_etl_file_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: etl_file_etl_file_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.etl_file_etl_file_id_seq OWNED BY public.etl_file.etl_file_id;
 
 
 --
--- Name: transaction; Type: TABLE; Schema: public; Owner: root
+-- Name: transaction; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.transaction (
@@ -148,10 +136,8 @@ CREATE TABLE public.transaction (
 WITH (autovacuum_enabled='false');
 
 
-ALTER TABLE public.transaction OWNER TO root;
-
 --
--- Name: uncle; Type: TABLE; Schema: public; Owner: root
+-- Name: uncle; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.uncle (
@@ -167,17 +153,15 @@ CREATE TABLE public.uncle (
 );
 
 
-ALTER TABLE public.uncle OWNER TO root;
-
 --
--- Name: etl_file etl_file_id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: etl_file etl_file_id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.etl_file ALTER COLUMN etl_file_id SET DEFAULT nextval('public.etl_file_etl_file_id_seq'::regclass);
 
 
 --
--- Name: block block_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: block block_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.block
@@ -185,7 +169,7 @@ ALTER TABLE ONLY public.block
 
 
 --
--- Name: etl_file etl_file_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: etl_file etl_file_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.etl_file
@@ -193,7 +177,7 @@ ALTER TABLE ONLY public.etl_file
 
 
 --
--- Name: transaction transaction_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: transaction transaction_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.transaction
@@ -201,7 +185,7 @@ ALTER TABLE ONLY public.transaction
 
 
 --
--- Name: uncle uncle_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: uncle uncle_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.uncle
@@ -209,28 +193,28 @@ ALTER TABLE ONLY public.uncle
 
 
 --
--- Name: address_hash; Type: INDEX; Schema: public; Owner: root
+-- Name: address_hash; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX address_hash ON public.address_ledger USING hash (address);
 
 
 --
--- Name: address_ledger_block_number_index; Type: INDEX; Schema: public; Owner: root
+-- Name: address_ledger_block_number_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX address_ledger_block_number_index ON public.address_ledger USING btree (block_number, block_index);
 
 
 --
--- Name: contract_address; Type: INDEX; Schema: public; Owner: root
+-- Name: contract_address; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX contract_address ON public.contract USING hash (contract_address);
 
 
 --
--- Name: contract_block_number_index; Type: INDEX; Schema: public; Owner: root
+-- Name: contract_block_number_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX contract_block_number_index ON public.contract USING btree (block_number, block_index);
